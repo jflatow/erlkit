@@ -1,0 +1,6 @@
+======
+erlkit
+======
+
+Basic Erlang utility modules to be included as a rebar dep.
+In other words, our very own standard library.
