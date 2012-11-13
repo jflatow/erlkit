@@ -133,7 +133,7 @@ nafter(TimeDB, Id, Max, At) ->
     end.
 
 nafter(_, _, Max, _, _, {N, Items}) when N >= Max ->
-    lists:nthtail(N - Max, lists:usort(Items));
+    lists:sublist(lists:usort(Items), Max);
 nafter(_, _, _, At, Newest, {_, Items}) when At > Newest ->
     lists:usort(Items);
 nafter(TimeDB, Id, Max, At, Newest, Acc) ->
