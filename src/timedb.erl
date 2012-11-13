@@ -4,6 +4,7 @@
          datetime/1,
          timestamp/1,
          between/2,
+         nafter/3,
          nbefore/3,
          log/3]).
 
@@ -116,9 +117,33 @@ between(TimeDB, {T1, T2} = Range) ->
                                 end, Acc)
               end, []).
 
-%% Just get up to N items before a particular Id or partial Id (i.e. timestamp)
-%% This is different than 'between(_, {undefined, T})' because we can jump out early once we have enough items.
+%% Just get up to N items before or after a particular Id or partial Id (i.e. timestamp)
+%% This is different than e.g. 'between(_, {undefined, T})' because we can jump out early once we have enough items.
 %% We need to optimize for this case since it is quite common.
+
+nafter(TimeDB, Id, Max) ->
+    nafter(TimeDB, Id, Max, datetime(Id)).
+
+nafter(TimeDB, Id, Max, At) ->
+    case newest(TimeDB) of
+        undefined ->
+            [];
+        Path ->
+            nafter(TimeDB, Id, Max, At, nextday(pathtime(Path)), {0, []})
+    end.
+
+nafter(_, _, Max, _, _, {N, Items}) when N >= Max ->
+    lists:nthtail(N - Max, lists:usort(Items));
+nafter(_, _, _, At, Newest, {_, Items}) when At > Newest ->
+    lists:usort(Items);
+nafter(TimeDB, Id, Max, At, Newest, Acc) ->
+    nafter(TimeDB, Id, Max, nextday(At), Newest,
+           folditems(path(TimeDB, At),
+                     fun ({Uniq, _, _} = Item, {N, Items}) when Uniq > Id ->
+                             {N + 1, [Item|Items]};
+                         (_, Acc_) ->
+                             Acc_
+                     end, Acc)).
 
 nbefore(TimeDB, Id, Max) ->
     nbefore(TimeDB, Id, Max, datetime(Id)).
