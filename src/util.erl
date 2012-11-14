@@ -7,7 +7,9 @@
          unhexdigit/1,
          urlencode/1,
          quote_plus/1,
-         revjoin/3]).
+         revjoin/3,
+         write/2,
+         write/3]).
 
 -define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
                      (C >= $A andalso C =< $Z) orelse
@@ -69,3 +71,28 @@ revjoin([S | Rest], Separator, []) ->
     revjoin(Rest, Separator, [S]);
 revjoin([S | Rest], Separator, Acc) ->
     revjoin(Rest, Separator, [S, Separator | Acc]).
+
+write(Path, Data) ->
+    write(Path, Data, []).
+
+write(Path, Data, Opts) ->
+    Temp = proplists:get_value(temp, Opts, Path ++ ".p"),
+    Dirs = proplists:get_value(dirs, Opts, true),
+    case file:write_file(Temp, Data) of
+        ok ->
+            case file:rename(Temp, Path) of
+                ok ->
+                    ok;
+                {error, Error} ->
+                    {error, rename, Error}
+            end;
+        {error, enoent} when Dirs =:= true ->
+            case filelib:ensure_dir(Temp) of
+                ok ->
+                    write(Path, Data, Opts);
+                {error, Error} ->
+                    {error, mkdir, Error}
+            end;
+        {error, Error} ->
+            {error, write, Error}
+    end.
