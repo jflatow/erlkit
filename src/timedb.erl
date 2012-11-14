@@ -121,6 +121,8 @@ between(TimeDB, {T1, T2} = Range) ->
 %% This is different than e.g. 'between(_, {undefined, T})' because we can jump out early once we have enough items.
 %% We need to optimize for this case since it is quite common.
 
+nafter(TimeDB, undefined, Max) ->
+    nafter(TimeDB, undefined, Max, pathtime(oldest(TimeDB)));
 nafter(TimeDB, Id, Max) ->
     nafter(TimeDB, Id, Max, datetime(Id)).
 
@@ -139,12 +141,14 @@ nafter(_, _, _, At, Newest, {_, Items}) when At > Newest ->
 nafter(TimeDB, Id, Max, At, Newest, Acc) ->
     nafter(TimeDB, Id, Max, nextday(At), Newest,
            folditems(path(TimeDB, At),
-                     fun ({Uniq, _, _} = Item, {N, Items}) when Uniq > Id ->
+                     fun ({Uniq, _, _} = Item, {N, Items}) when Uniq > Id; Id =:= undefined ->
                              {N + 1, [Item|Items]};
                          (_, Acc_) ->
                              Acc_
                      end, Acc)).
 
+nbefore(TimeDB, undefined, Max) ->
+    nbefore(TimeDB, undefined, Max, nextday(pathtime(newest(TimeDB))));
 nbefore(TimeDB, Id, Max) ->
     nbefore(TimeDB, Id, Max, datetime(Id)).
 
@@ -163,7 +167,7 @@ nbefore(_, _, _, At, Oldest, {_, Items}) when At < Oldest ->
 nbefore(TimeDB, Id, Max, At, Oldest, Acc) ->
     nbefore(TimeDB, Id, Max, prevday(At), Oldest,
             folditems(path(TimeDB, At),
-                      fun ({Uniq, _, _} = Item, {N, Items}) when Uniq < Id ->
+                      fun ({Uniq, _, _} = Item, {N, Items}) when Uniq < Id; Id =:= undefined ->
                               {N + 1, [Item|Items]};
                           (_, Acc_) ->
                               Acc_
