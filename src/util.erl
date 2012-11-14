@@ -1,6 +1,7 @@
 -module(util).
 
 -export([ago/1,
+         month/1,
          seconds/1,
          int/1,
          hexdigit/1,
@@ -18,6 +19,21 @@
 
 ago(Seconds) ->
     calendar:gregorian_seconds_to_datetime(seconds(calendar:universal_time()) - Seconds).
+
+month(<<"Jan">>) -> 1;
+month(<<"Feb">>) -> 2;
+month(<<"Mar">>) -> 3;
+month(<<"Apr">>) -> 4;
+month(<<"May">>) -> 5;
+month(<<"Jun">>) -> 6;
+month(<<"Jul">>) -> 7;
+month(<<"Aug">>) -> 8;
+month(<<"Sep">>) -> 9;
+month(<<"Oct">>) -> 10;
+month(<<"Nov">>) -> 11;
+month(<<"Dec">>) -> 12;
+month(Str) when is_list(Str) ->
+    month(list_to_binary(Str)).
 
 seconds(Seconds) when is_integer(Seconds) ->
     Seconds;
