@@ -1,6 +1,7 @@
 -module(util).
 
 -export([ago/1,
+         ago/2,
          month/1,
          seconds/1,
          int/1,
@@ -18,7 +19,10 @@
                      (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
 
 ago(Seconds) ->
-    calendar:gregorian_seconds_to_datetime(seconds(calendar:universal_time()) - Seconds).
+    ago(calendar:universal_time(), Seconds).
+
+ago(Time, Seconds) ->
+    calendar:gregorian_seconds_to_datetime(seconds(Time) - Seconds).
 
 month(<<"Jan">>) -> 1;
 month(<<"Feb">>) -> 2;
