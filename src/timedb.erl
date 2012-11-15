@@ -129,7 +129,12 @@ between(TimeDB, {T1, T2} = Range) ->
 %% We need to optimize for this case since it is quite common.
 
 nafter(TimeDB, undefined, Max) ->
-    nafter(TimeDB, undefined, Max, pathtime(oldest(TimeDB)));
+    case oldest(TimeDB) of
+        undefined ->
+            [];
+        Path ->
+            nafter(TimeDB, undefined, Max, pathtime(Path))
+    end;
 nafter(TimeDB, Id, Max) ->
     nafter(TimeDB, Id, Max, datetime(Id)).
 
@@ -155,7 +160,12 @@ nafter(TimeDB, Id, Max, At, Newest, Acc) ->
                      end, Acc)).
 
 nbefore(TimeDB, undefined, Max) ->
-    nbefore(TimeDB, undefined, Max, nextday(pathtime(newest(TimeDB))));
+    case newest(TimeDB) of
+        undefined ->
+            [];
+        Path ->
+            nbefore(TimeDB, undefined, Max, nextday(pathtime(Path)))
+    end;
 nbefore(TimeDB, Id, Max) ->
     nbefore(TimeDB, Id, Max, datetime(Id)).
 
