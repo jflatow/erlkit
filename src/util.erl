@@ -62,7 +62,7 @@ hex(<<>>) ->
     <<>>.
 
 hexdigit(C) when C < 10 -> $0 + C;
-hexdigit(C) when C < 16 -> $A + (C - 10).
+hexdigit(C) when C < 16 -> $a + (C - 10).
 
 unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
