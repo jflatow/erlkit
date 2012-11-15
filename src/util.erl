@@ -5,6 +5,7 @@
          month/1,
          seconds/1,
          int/1,
+         hex/1,
          hexdigit/1,
          unhexdigit/1,
          urlencode/1,
@@ -52,6 +53,13 @@ int(Atom) when is_atom(Atom) ->
     list_to_integer(atom_to_list(Atom));
 int(List) when is_list(List) ->
     list_to_integer(List).
+
+hex(List) when is_list(List) ->
+    hex(list_to_binary(List));
+hex(<<Q:4, Rest/bitstring>>) ->
+    <<(hexdigit(Q)), (hex(Rest))/binary>>;
+hex(<<>>) ->
+    <<>>.
 
 hexdigit(C) when C < 10 -> $0 + C;
 hexdigit(C) when C < 16 -> $A + (C - 10).
