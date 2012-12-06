@@ -12,32 +12,37 @@
 fold(Tree, Fun, Acc) ->
     fold(Tree, Fun, Acc, {undefined, undefined}).
 
-fold(Path, Fun, Acc, Bounds) when is_binary(Path) ->
-    fold([binary_to_list(Path)], Fun, Acc, Bounds);
-fold([C|_] = Path, Fun, Acc, Bounds) when is_integer(C) ->
-    fold([Path], Fun, Acc, Bounds);
-fold([], _, Acc, _) ->
+fold(Tree, Fun, Acc, {_, _} = Bounds) ->
+    fold(Tree, Fun, Acc, Bounds, fun lists:usort/1);
+fold(Tree, Fun, Acc, Order) when is_function(Order) ->
+    fold(Tree, Fun, Acc, {undefined, undefined}, Order).
+
+fold(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
+    fold([binary_to_list(Path)], Fun, Acc, Bounds, Order);
+fold([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
+    fold([Path], Fun, Acc, Bounds, Order);
+fold([], _, Acc, _, _) ->
     Acc;
-fold([Path|_], _, Acc, {_, Upper}) when Upper =/= undefined, Path >= Upper ->
+fold([Path|_], _, Acc, {_, Upper}, _) when Upper =/= undefined, Path >= Upper ->
     Acc;
-fold([Path|Tail], Fun, Acc, {Lower, Upper}) when Lower =:= undefined; Lower =< Path ->
+fold([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Lower =:= undefined; Lower =< Path ->
     case file:list_dir(Path) of
         {ok, Paths} ->
-            fold([filename:join(Path, F) || F <- lists:usort(Paths)] ++ Tail, Fun, Acc, {Lower, Upper});
+            fold([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
         {error, enotdir} ->
-            fold(Tail, Fun, Fun(Path, Acc), {Lower, Upper})
+            fold(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order)
     end;
-fold([Path|Tail], Fun, Acc, {Lower, Upper}) ->
+fold([Path|Tail], Fun, Acc, {Lower, Upper}, Order) ->
     case lists:prefix(Path, Lower) of
         true ->
             case file:list_dir(Path) of
                 {ok, Paths} ->
-                    fold([filename:join(Path, F) || F <- lists:usort(Paths)] ++ Tail, Fun, Acc, {Lower, Upper});
+                    fold([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
                 _ ->
-                    fold(Tail, Fun, Acc, {Lower, Upper})
+                    fold(Tail, Fun, Acc, {Lower, Upper}, Order)
             end;
         false ->
-            fold(Tail, Fun, Acc, {Lower, Upper})
+            fold(Tail, Fun, Acc, {Lower, Upper}, Order)
     end.
 
 head(Tree) ->
