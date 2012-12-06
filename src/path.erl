@@ -30,7 +30,9 @@ fold([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Lower =:= undefined; Low
         {ok, Paths} ->
             fold([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
         {error, enotdir} ->
-            fold(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order)
+            fold(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order);
+        {error, enoent} ->
+            fold(Tail, Fun, Acc, {Lower, Upper}, Order)
     end;
 fold([Path|Tail], Fun, Acc, {Lower, Upper}, Order) ->
     case lists:prefix(Path, Lower) of
