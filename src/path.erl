@@ -1,7 +1,9 @@
 -module(path).
 
--export([fold/3,
-         fold/4,
+-export([foldl/3,
+         foldl/4,
+         foldr/3,
+         foldr/4,
          head/1,
          head/2,
          head/3,
@@ -9,43 +11,81 @@
          last/2,
          last/3]).
 
-fold(Tree, Fun, Acc) ->
-    fold(Tree, Fun, Acc, {undefined, undefined}).
+foldl(Tree, Fun, Acc) ->
+    foldl(Tree, Fun, Acc, {undefined, undefined}).
 
-fold(Tree, Fun, Acc, {_, _} = Bounds) ->
-    fold(Tree, Fun, Acc, Bounds, fun lists:usort/1);
-fold(Tree, Fun, Acc, Order) when is_function(Order) ->
-    fold(Tree, Fun, Acc, {undefined, undefined}, Order).
+foldl(Tree, Fun, Acc, {_, _} = Bounds) ->
+    foldl(Tree, Fun, Acc, Bounds, fun lists:usort/1);
+foldl(Tree, Fun, Acc, Order) when is_function(Order) ->
+    foldl(Tree, Fun, Acc, {undefined, undefined}, Order).
 
-fold(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
-    fold([binary_to_list(Path)], Fun, Acc, Bounds, Order);
-fold([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
-    fold([Path], Fun, Acc, Bounds, Order);
-fold([], _, Acc, _, _) ->
+foldl(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
+    foldl([binary_to_list(Path)], Fun, Acc, Bounds, Order);
+foldl([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
+    foldl([Path], Fun, Acc, Bounds, Order);
+foldl([], _, Acc, _, _) ->
     Acc;
-fold([Path|_], _, Acc, {_, Upper}, _) when Upper =/= undefined, Path >= Upper ->
+foldl([Path|_], _, Acc, {_, Upper}, _) when Upper =/= undefined, Path >= Upper ->
     Acc;
-fold([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Lower =:= undefined; Lower =< Path ->
+foldl([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Lower =:= undefined; Path >= Lower ->
     case file:list_dir(Path) of
         {ok, Paths} ->
-            fold([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
+            foldl([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
         {error, enotdir} ->
-            fold(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order);
+            foldl(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order);
         {error, enoent} ->
-            fold(Tail, Fun, Acc, {Lower, Upper}, Order)
+            foldl(Tail, Fun, Acc, {Lower, Upper}, Order)
     end;
-fold([Path|Tail], Fun, Acc, {Lower, Upper}, Order) ->
+foldl([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Path < Lower ->
     case lists:prefix(Path, Lower) of
         true ->
             case file:list_dir(Path) of
                 {ok, Paths} ->
-                    fold([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
+                    foldl([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
                 _ ->
-                    fold(Tail, Fun, Acc, {Lower, Upper}, Order)
+                    foldl(Tail, Fun, Acc, {Lower, Upper}, Order)
             end;
         false ->
-            fold(Tail, Fun, Acc, {Lower, Upper}, Order)
+            foldl(Tail, Fun, Acc, {Lower, Upper}, Order)
     end.
+
+foldr(Tree, Fun, Acc) ->
+    foldr(Tree, Fun, Acc, {undefined, undefined}).
+
+foldr(Tree, Fun, Acc, {_, _} = Bounds) ->
+    foldr(Tree, Fun, Acc, Bounds, fun (L) -> lists:reverse(lists:usort(L)) end);
+foldr(Tree, Fun, Acc, Order) when is_function(Order) ->
+    foldr(Tree, Fun, Acc, {undefined, undefined}, Order).
+
+foldr(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
+    foldr([binary_to_list(Path)], Fun, Acc, Bounds, Order);
+foldr([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
+    foldr([Path], Fun, Acc, Bounds, Order);
+foldr([], _, Acc, _, _) ->
+    Acc;
+foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Lower =/= undefined, Path < Lower ->
+    case lists:prefix(Path, Lower) of
+        true ->
+            case file:list_dir(Path) of
+                {ok, Paths} ->
+                    foldr([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Upper, Lower}, Order);
+                _ ->
+                    foldr(Tail, Fun, Acc, {Upper, Lower}, Order)
+            end;
+        false ->
+            Acc
+    end;
+foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Upper =:= undefined; Path < Upper ->
+    case file:list_dir(Path) of
+        {ok, Paths} ->
+            foldr([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Upper, Lower}, Order);
+        {error, enotdir} ->
+            foldr(Tail, Fun, Fun(Path, Acc), {Upper, Lower}, Order);
+        {error, enoent} ->
+            foldr(Tail, Fun, Acc, {Upper, Lower}, Order)
+    end;
+foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Path >= Upper ->
+    foldr(Tail, Fun, Acc, {Upper, Lower}, Order).
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).
