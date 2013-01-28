@@ -103,6 +103,8 @@ revjoin([S | Rest], Separator, Acc) ->
 write(Path, Data) ->
     write(Path, Data, []).
 
+write(Path, Data, Opts) when is_binary(Path) ->
+    write(binary_to_list(Path), Data, Opts);
 write(Path, Data, Opts) ->
     Temp = proplists:get_value(temp, Opts, Path ++ ".p"),
     Dirs = proplists:get_value(dirs, Opts, true),
