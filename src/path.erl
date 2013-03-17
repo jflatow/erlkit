@@ -20,6 +20,8 @@ foldl(Tree, Fun, Acc, {_, _} = Bounds) ->
 foldl(Tree, Fun, Acc, Order) when is_function(Order) ->
     foldl(Tree, Fun, Acc, {undefined, undefined}, Order).
 
+foldl(_, _, {stop, Acc}, _, _) ->
+    Acc;
 foldl(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
     foldl([binary_to_list(Path)], Fun, Acc, Bounds, Order);
 foldl([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
@@ -58,6 +60,8 @@ foldr(Tree, Fun, Acc, {_, _} = Bounds) ->
 foldr(Tree, Fun, Acc, Order) when is_function(Order) ->
     foldr(Tree, Fun, Acc, {undefined, undefined}, Order).
 
+foldr(_, _, {stop, Acc}, _, _) ->
+    Acc;
 foldr(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
     foldr([binary_to_list(Path)], Fun, Acc, Bounds, Order);
 foldr([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
