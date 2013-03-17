@@ -1,11 +1,8 @@
 -module(timedb).
 
 -export([open/1,
-         datetime/1,
-         timestamp/1,
          nextday/1,
          prevday/1,
-         passtime/2,
          first/2,
          oldest/1,
          newest/1,
@@ -15,7 +12,10 @@
          nbefore/3,
          log/3]).
 
--import(util, [int/1]).
+-import(util, [ago/2,
+               datetime/1,
+               timestamp/1,
+               int/1]).
 
 -record(timedb, {root}).
 
@@ -24,25 +24,11 @@ open(Root) when is_binary(Root) ->
 open(Root) ->
     #timedb{root=Root}.
 
-%% not very strict parsing of timestamps
-datetime(Seconds) when is_integer(Seconds) ->
-    calendar:gregorian_seconds_to_datetime(Seconds);
-datetime(<<Y:4/binary, "/", M:2/binary, "/", D:2/binary, " ", H:2/binary, ":", Mi:2/binary, ":", S:2/binary, _/binary>>) ->
-    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
-datetime(_) ->
-    undefined.
-
-timestamp({{Y, M, D}, {H, Mi, S}}) ->
-    io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]).
-
 nextday(Time) ->
-    passtime(Time, 86400).
+    ago(Time, -86400).
 
 prevday(Time) ->
-    passtime(Time, -86400).
-
-passtime(Time, Seconds) ->
-    calendar:gregorian_seconds_to_datetime(calendar:datetime_to_gregorian_seconds(Time) + Seconds).
+    ago(Time, 86400).
 
 pathtime(Path) ->
     pathtime(lists:reverse(filename:split(Path)), acc).

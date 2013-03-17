@@ -2,17 +2,17 @@
 
 -export([ago/1,
          ago/2,
+         datetime/1,
          month/1,
          seconds/1,
+         timestamp/1,
          int/1,
          hex/1,
          hexdigit/1,
          unhexdigit/1,
          urlencode/1,
          quote_plus/1,
-         revjoin/3,
-         write/2,
-         write/3]).
+         revjoin/3]).
 
 -define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
                      (C >= $A andalso C =< $Z) orelse
@@ -23,7 +23,14 @@ ago(Seconds) ->
     ago(calendar:universal_time(), Seconds).
 
 ago(Time, Seconds) ->
-    calendar:gregorian_seconds_to_datetime(seconds(Time) - Seconds).
+    datetime(seconds(Time) - Seconds).
+
+datetime(Seconds) when is_integer(Seconds) ->
+    calendar:gregorian_seconds_to_datetime(Seconds);
+datetime(<<Y:4/binary, "/", M:2/binary, "/", D:2/binary, " ", H:2/binary, ":", Mi:2/binary, ":", S:2/binary, _/binary>>) ->
+    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
+datetime(_) ->
+    undefined.
 
 month(<<"Jan">>) -> 1;
 month(<<"Feb">>) -> 2;
@@ -44,6 +51,9 @@ seconds(Seconds) when is_integer(Seconds) ->
     Seconds;
 seconds(DateTime) ->
     calendar:datetime_to_gregorian_seconds(DateTime).
+
+timestamp({{Y, M, D}, {H, Mi, S}}) ->
+    io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]).
 
 int(Int) when is_integer(Int) ->
     Int;
@@ -99,30 +109,3 @@ revjoin([S | Rest], Separator, []) ->
     revjoin(Rest, Separator, [S]);
 revjoin([S | Rest], Separator, Acc) ->
     revjoin(Rest, Separator, [S, Separator | Acc]).
-
-write(Path, Data) ->
-    write(Path, Data, []).
-
-write(Path, Data, Opts) when is_binary(Path) ->
-    write(binary_to_list(Path), Data, Opts);
-write(Path, Data, Opts) ->
-    Temp = proplists:get_value(temp, Opts, Path ++ ".p"),
-    Dirs = proplists:get_value(dirs, Opts, true),
-    case file:write_file(Temp, Data) of
-        ok ->
-            case file:rename(Temp, Path) of
-                ok ->
-                    ok;
-                {error, Error} ->
-                    {error, rename, Error}
-            end;
-        {error, enoent} when Dirs =:= true ->
-            case filelib:ensure_dir(Temp) of
-                ok ->
-                    write(Path, Data, Opts);
-                {error, Error} ->
-                    {error, mkdir, Error}
-            end;
-        {error, Error} ->
-            {error, write, Error}
-    end.

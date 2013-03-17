@@ -4,12 +4,13 @@
          foldl/4,
          foldr/3,
          foldr/4,
+         foldlines/3,
          head/1,
          head/2,
-         head/3,
          last/1,
          last/2,
-         last/3]).
+         write/2,
+         write/3]).
 
 foldl(Tree, Fun, Acc) ->
     foldl(Tree, Fun, Acc, {undefined, undefined}).
@@ -87,28 +88,40 @@ foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Upper =:= undefined; Pa
 foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Path >= Upper ->
     foldr(Tail, Fun, Acc, {Upper, Lower}, Order).
 
+foldlines(Path, Fun, Acc) when is_binary(Path); is_list(Path) ->
+    case file:open(Path, [binary, read, raw, {read_ahead, 10 * 1024 bsl 10}]) of
+        {ok, File} ->
+            foldlines(File, Fun, Acc);
+        {error, eisdir} ->
+            foldl(Path, fun (P, A) -> foldlines(P, Fun, A) end, Acc)
+    end;
+foldlines(File, Fun, Acc) ->
+    case file:read_line(File) of
+        {ok, Line} ->
+            foldlines(File, Fun, Fun(Line, Acc));
+        eof ->
+            Acc
+    end.
+
 head(Tree) ->
     head(Tree, fun lists:usort/1).
 
-head(Tree, Order) ->
-    head(Tree, Order, fun (_) -> true end).
-
-head(Path, Order, Filter) when is_binary(Path) ->
-    head([Path], Order, Filter);
-head([C|_] = Path, Order, Filter) when is_integer(C) ->
-    head([Path], Order, Filter);
-head([], _, _) ->
+head(Path, Order) when is_binary(Path) ->
+    head([Path], Order);
+head([C|_] = Path, Order) when is_integer(C) ->
+    head([Path], Order);
+head([], _) ->
     undefined;
-head([Path|Tail], Order, Filter) ->
+head([Path|Tail], Order) ->
     case filelib:is_regular(Path) of
         true ->
             Path;
         false ->
             case file:list_dir(Path) of
                 {ok, [_|_] = Paths} ->
-                    head([filename:join(Path, F) || F <- Order(Paths), Filter(F)] ++ Tail, Order, Filter);
+                    head([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Order);
                 _ ->
-                    head(Tail, Order, Filter)
+                    head(Tail, Order)
             end
     end.
 
@@ -116,7 +129,31 @@ last(Tree) ->
     last(Tree, fun lists:usort/1).
 
 last(Tree, Order) ->
-    last(Tree, Order, fun (_) -> true end).
+    head(Tree, fun (L) -> lists:reverse(Order(L)) end).
 
-last(Tree, Order, Filter) ->
-    head(Tree, fun (L) -> lists:reverse(Order(L)) end, Filter).
+write(Path, Data) ->
+    write(Path, Data, []).
+
+write(Path, Data, Opts) when is_binary(Path) ->
+    write(binary_to_list(Path), Data, Opts);
+write(Path, Data, Opts) ->
+    Temp = proplists:get_value(temp, Opts, Path ++ ".p"),
+    Dirs = proplists:get_value(dirs, Opts, true),
+    case file:write_file(Temp, Data) of
+        ok ->
+            case file:rename(Temp, Path) of
+                ok ->
+                    ok;
+                {error, Error} ->
+                    {error, rename, Error}
+            end;
+        {error, enoent} when Dirs =:= true ->
+            case filelib:ensure_dir(Temp) of
+                ok ->
+                    write(Path, Data, Opts);
+                {error, Error} ->
+                    {error, mkdir, Error}
+            end;
+        {error, Error} ->
+            {error, write, Error}
+    end.
