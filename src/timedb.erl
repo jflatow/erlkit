@@ -1,7 +1,9 @@
 -module(timedb).
 
 -export([open/1,
+         open/2,
          path/2,
+         path/3,
          between/2,
          nafter/3,
          nbefore/3,
@@ -9,17 +11,31 @@
 
 -import(util, [datetime/1, timestamp/1]).
 
--record(timedb, {root}).
+-record(timedb, {root, opts}).
 
-open(Root) when is_binary(Root) ->
-    open(binary_to_list(Root));
 open(Root) ->
-    #timedb{root=Root}.
+    open(Root, []).
 
-path(#timedb{root=Root}, Time) ->
-    path(Root, Time);
-path(Root, {{Y, M, D}, _}) ->
-    lists:flatten(io_lib:format("~s/~4..0B/~2..0B/~2..0B", [Root, Y, M, D])).
+open(Root, Opts) when is_binary(Root) ->
+    open(binary_to_list(Root), Opts);
+open(Root, Opts) ->
+    #timedb{root=Root, opts=Opts}.
+
+path(#timedb{root=Root, opts=Opts}, Time) ->
+    path(Root, Time, proplists:get_value(by, Opts, day)).
+
+path(Root, {{Y, M, D}, {H, Mi, S}}, second) ->
+    lists:flatten(io_lib:format("~s/~4..0B/~2..0B/~2..0B/~2..0B/~2..0B/~2..0B", [Root, Y, M, D, H, Mi, S]));
+path(Root, {{Y, M, D}, {H, Mi, _}}, minute) ->
+    lists:flatten(io_lib:format("~s/~4..0B/~2..0B/~2..0B/~2..0B/~2..0B", [Root, Y, M, D, H, Mi]));
+path(Root, {{Y, M, D}, {H, _, _}}, hour) ->
+    lists:flatten(io_lib:format("~s/~4..0B/~2..0B/~2..0B/~2..0B", [Root, Y, M, D, H]));
+path(Root, {{Y, M, D}, _}, day) ->
+    lists:flatten(io_lib:format("~s/~4..0B/~2..0B/~2..0B", [Root, Y, M, D]));
+path(Root, {{Y, M, _}, _}, month) ->
+    lists:flatten(io_lib:format("~s/~4..0B/~2..0B", [Root, Y, M]));
+path(Root, {{Y, _, _}, _}, year) ->
+    lists:flatten(io_lib:format("~s/~4..0B", [Root, Y])).
 
 lower(_, undefined) ->
     undefined;
