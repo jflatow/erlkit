@@ -104,6 +104,7 @@ foldlines(File, Fun, Acc) ->
         {ok, Line} ->
             foldlines(File, Fun, Fun(Line, Acc));
         eof ->
+            ok = file:close(File),
             Acc
     end.
 
