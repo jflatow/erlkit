@@ -16,7 +16,8 @@
          nbefore/3,
          log/2,
          log/3,
-         usort/1]).
+         usort/1,
+         usort/2]).
 
 -import(util, [datetime/1, timestamp/1]).
 
@@ -156,8 +157,11 @@ log(TimeDB, Time, <<Data/binary>>) ->
     end.
 
 usort(TimeDB) ->
+    usort(TimeDB, {undefined, undefined}).
+
+usort(TimeDB, Range) ->
     foldl(TimeDB,
           fun (Path, _) ->
-                  Vals = folditems(Path, fun ({_, T, D}, V) -> [{T, D}|V] end, []),
-                  path:write(Path, [format(T, D) || {T, D} <- lists:usort(Vals)])
-          end, []).
+                  Vs = folditems(Path, fun ({_, T, D}, V) -> [{T, D}|V] end, []),
+                  ok = path:write(Path, [format(T, D) || {T, D} <- lists:usort(Vs)])
+          end, ok, Range).
