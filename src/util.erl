@@ -56,7 +56,7 @@ seconds(DateTime) ->
     calendar:datetime_to_gregorian_seconds(DateTime).
 
 timestamp({{Y, M, D}, {H, Mi, S}}) ->
-    io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]).
+    list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S])).
 
 int(Int) when is_integer(Int) ->
     Int;
