@@ -12,7 +12,10 @@
          unhexdigit/1,
          urlencode/1,
          quote_plus/1,
-         revjoin/3]).
+         revjoin/3,
+         lstrip/2,
+         rstrip/2,
+         strip/2]).
 
 -define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
                      (C >= $A andalso C =< $Z) orelse
@@ -80,7 +83,7 @@ unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
 
 urlencode(Props) ->
     RevPairs = lists:foldl(fun ({K, V}, Acc) ->
-                                   [[quote_plus(K), $=, quote_plus(V)] | Acc]
+                                   [[quote_plus(K), $=, quote_plus(V)]|Acc]
                            end, [], Props),
     lists:flatten(revjoin(RevPairs, $&, [])).
 
@@ -95,17 +98,46 @@ quote_plus(String) ->
 
 quote_plus([], Acc) ->
     lists:reverse(Acc);
-quote_plus([C | Rest], Acc) when ?QS_SAFE(C) ->
-    quote_plus(Rest, [C | Acc]);
-quote_plus([$\s | Rest], Acc) ->
-    quote_plus(Rest, [$+ | Acc]);
-quote_plus([C | Rest], Acc) ->
+quote_plus([C|Rest], Acc) when ?QS_SAFE(C) ->
+    quote_plus(Rest, [C|Acc]);
+quote_plus([$\s|Rest], Acc) ->
+    quote_plus(Rest, [$+|Acc]);
+quote_plus([C|Rest], Acc) ->
     <<Hi:4, Lo:4>> = <<C>>,
-    quote_plus(Rest, [hexdigit(Lo), hexdigit(Hi), $\% | Acc]).
+    quote_plus(Rest, [hexdigit(Lo), hexdigit(Hi), $\%|Acc]).
 
 revjoin([], _Separator, Acc) ->
     Acc;
-revjoin([S | Rest], Separator, []) ->
+revjoin([S|Rest], Separator, []) ->
     revjoin(Rest, Separator, [S]);
-revjoin([S | Rest], Separator, Acc) ->
-    revjoin(Rest, Separator, [S, Separator | Acc]).
+revjoin([S|Rest], Separator, Acc) ->
+    revjoin(Rest, Separator, [S, Separator|Acc]).
+
+lstrip([C|Rest], C) ->
+    lstrip(Rest, C);
+lstrip(<<C, Rest/binary>>, C) ->
+    lstrip(Rest, C);
+lstrip(Seq, _) ->
+    Seq.
+
+rstrip([C|Rest], C) ->
+    case rstrip(Rest, C) of
+        [] ->
+            [];
+        Tail  ->
+            [C|Tail]
+    end;
+rstrip([O|Rest], C) ->
+    [O|rstrip(Rest, C)];
+rstrip(<<_, _/binary>> = Bin, C) when is_binary(Bin) ->
+    case binary:last(Bin) of
+        C ->
+            rstrip(binary:part(Bin, 0, size(Bin) - 1), C);
+        _ ->
+            Bin
+    end;
+rstrip(Seq, _) ->
+    Seq.
+
+strip(Seq, C) ->
+    rstrip(lstrip(Seq, C), C).

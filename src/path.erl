@@ -97,7 +97,9 @@ foldlines(Path, Fun, Acc) when is_binary(Path); is_list(Path) ->
         {ok, File} ->
             foldlines(File, Fun, Acc);
         {error, eisdir} ->
-            foldl(Path, fun (P, A) -> foldlines(P, Fun, A) end, Acc)
+            foldl(Path, fun (P, A) -> foldlines(P, Fun, A) end, Acc);
+        {error, enoent} ->
+            Acc
     end;
 foldlines(File, Fun, Acc) ->
     case file:read_line(File) of
