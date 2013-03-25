@@ -10,7 +10,7 @@
          foldr/4,
          folditems/3,
          format/2,
-         vals/1,
+         items/1,
          all/1,
          between/2,
          nafter/3,
@@ -91,8 +91,8 @@ folditems(<<Timestamp:19/binary, " ", A/binary>>, Fun, Acc, N) ->
 format(Time, Data) ->
     io_lib:format("~s ~B ~s~n", [timestamp(Time), size(Data), Data]).
 
-vals(Path) ->
-    folditems(Path, fun ({_, Time, Data}, Acc) -> [{Time, Data}|Acc] end, []).
+items(Path) ->
+    folditems(Path, fun (Item, Acc) -> [Item|Acc] end, []).
 
 all(TimeDB) ->
     between(TimeDB, {undefined, undefined}).
@@ -164,9 +164,10 @@ usort(TimeDB) ->
     usort(TimeDB, {undefined, undefined}).
 
 usort(TimeDB, Range) ->
+    Order = fun ({_, T1, D1}, {_, T2, D2}) -> {T1, D1} =< {T2, D2} end,
     lists:umerge(foldl(TimeDB,
                        fun (Path, Acc) ->
-                               Vs = lists:usort(vals(Path)),
-                               ok = path:write(Path, [format(T, D) || {T, D} <- Vs]),
-                               [Vs|Acc]
+                               Is = lists:usort(Order, items(Path)),
+                               ok = path:write(Path, [format(T, D) || {_, T, D} <- Is]),
+                               [Is|Acc]
                        end, [], Range)).
