@@ -167,7 +167,12 @@ usort(TimeDB, Range) ->
     Order = fun ({_, T1, D1}, {_, T2, D2}) -> {T1, D1} =< {T2, D2} end,
     lists:umerge(foldl(TimeDB,
                        fun (Path, Acc) ->
-                               Is = lists:usort(Order, items(Path)),
-                               ok = path:write(Path, [format(T, D) || {_, T, D} <- Is]),
-                               [Is|Acc]
+                               Items = lists:reverse(items(Path)),
+                               case lists:usort(Order, Items) of
+                                   Items ->
+                                       [Items|Acc];
+                                   Is ->
+                                       ok = path:write(Path, [format(T, D) || {_, T, D} <- Is]),
+                                       [Is|Acc]
+                               end
                        end, [], Range)).
