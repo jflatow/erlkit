@@ -5,6 +5,7 @@
          foldr/3,
          foldr/4,
          foldlines/3,
+         lines/1,
          head/1,
          head/2,
          last/1,
@@ -109,6 +110,9 @@ foldlines(File, Fun, Acc) ->
             ok = file:close(File),
             Acc
     end.
+
+lines(Path) ->
+    lists:reverse(foldlines(Path, fun (Line, Acc) -> [util:rstrip(Line, $\n)|Acc] end, [])).
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).
