@@ -5,7 +5,9 @@
          foldr/3,
          foldr/4,
          foldlines/3,
+         foldlines/4,
          lines/1,
+         lines/2,
          head/1,
          head/2,
          last/1,
@@ -93,26 +95,35 @@ foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Upper =:= undefined; Pa
 foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Path >= Upper ->
     foldr(Tail, Fun, Acc, {Upper, Lower}, Order).
 
-foldlines(Path, Fun, Acc) when is_binary(Path); is_list(Path) ->
+foldlines(Path, Fun, Acc) ->
+    foldlines(Path, Fun, Acc, []).
+
+foldlines(Path, Fun, Acc, Opts) when is_binary(Path); is_list(Path) ->
     case file:open(Path, [binary, read, raw, {read_ahead, 10 * 1024 bsl 10}]) of
         {ok, File} ->
-            foldlines(File, Fun, Acc);
+            foldlines(File, Fun, Acc, Opts);
         {error, eisdir} ->
-            foldl(Path, fun (P, A) -> foldlines(P, Fun, A) end, Acc);
+            foldl(Path, fun (P, A) -> foldlines(P, Fun, A, Opts) end, Acc);
         {error, enoent} ->
             Acc
     end;
-foldlines(File, Fun, Acc) ->
+foldlines(File, Fun, Acc, Opts) ->
+    Trim = proplists:get_value(trim, Opts),
     case file:read_line(File) of
+        {ok, Line} when Trim =:= true ->
+            foldlines(File, Fun, Fun(util:rstrip(Line, $\n), Acc), Opts);
         {ok, Line} ->
-            foldlines(File, Fun, Fun(Line, Acc));
+            foldlines(File, Fun, Fun(Line, Acc), Opts);
         eof ->
             ok = file:close(File),
             Acc
     end.
 
 lines(Path) ->
-    lists:reverse(foldlines(Path, fun (Line, Acc) -> [util:rstrip(Line, $\n)|Acc] end, [])).
+    lines(Path, []).
+
+lines(Path, Opts) ->
+    lists:reverse(foldlines(Path, fun (Line, Acc) -> [Line|Acc] end, [], Opts)).
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).
