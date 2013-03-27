@@ -15,7 +15,9 @@
          revjoin/3,
          lstrip/2,
          rstrip/2,
-         strip/2]).
+         strip/2,
+         lower/1,
+         upper/1]).
 
 -define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
                      (C >= $A andalso C =< $Z) orelse
@@ -141,3 +143,13 @@ rstrip(Seq, _) ->
 
 strip(Seq, C) ->
     rstrip(lstrip(Seq, C), C).
+
+lower(Bin) when is_binary(Bin) ->
+    unicode:characters_to_binary(lower(unicode:characters_to_list(Bin)));
+lower(Str) ->
+    string:to_lower(Str).
+
+upper(Bin) when is_binary(Bin) ->
+    unicode:characters_to_binary(upper(unicode:characters_to_list(Bin)));
+upper(Str) ->
+    string:to_upper(Str).
