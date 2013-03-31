@@ -2,8 +2,10 @@
 
 -export([foldl/3,
          foldl/4,
+         foldl/5,
          foldr/3,
          foldr/4,
+         foldr/5,
          foldlines/3,
          foldlines/4,
          lines/1,
