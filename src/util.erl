@@ -34,6 +34,12 @@ datetime(Seconds) when is_integer(Seconds) ->
     calendar:gregorian_seconds_to_datetime(Seconds);
 datetime(<<Y:4/binary, "/", M:2/binary, "/", D:2/binary, " ", H:2/binary, ":", Mi:2/binary, ":", S:2/binary, _/binary>>) ->
     {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
+datetime(<<Y:4/binary, "/", M:2/binary, "/", D:2/binary, _/binary>>) ->
+    {{int(Y), int(M), int(D)}, {0, 0, 0}};
+datetime(<<Y:4/binary, "-", M:2/binary, "-", D:2/binary, " ", H:2/binary, ":", Mi:2/binary, ":", S:2/binary, _/binary>>) ->
+    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
+datetime(<<Y:4/binary, "-", M:2/binary, "-", D:2/binary, _/binary>>) ->
+    {{int(Y), int(M), int(D)}, {0, 0, 0}};
 datetime(_) ->
     undefined.
 
