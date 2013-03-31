@@ -88,6 +88,8 @@ folditems(<<Timestamp:19/binary, " ", A/binary>>, Fun, Acc, N) ->
     Time = datetime(Timestamp),
     folditems(C, Fun, Fun({Uniq, Time, Data}, Acc), N + 1).
 
+format(Time, Data) when is_list(Data) ->
+    format(Time, iolist_to_binary(Data));
 format(Time, Data) ->
     io_lib:format("~s ~B ~s~n", [timestamp(Time), size(Data), Data]).
 
@@ -143,7 +145,7 @@ nbefore(TimeDB, Id, Max) ->
 log(TimeDB, Data) ->
     log(TimeDB, calendar:universal_time(), Data).
 
-log(TimeDB, Time, <<Data/binary>>) ->
+log(TimeDB, Time, Data) ->
     Path = path(TimeDB, Time),
     case file:open(Path, [append, binary]) of
         {ok, File} ->
