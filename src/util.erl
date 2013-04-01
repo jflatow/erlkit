@@ -6,7 +6,9 @@
          month/1,
          seconds/1,
          timestamp/1,
+         flt/1,
          int/1,
+         num/1,
          hex/1,
          hexdigit/1,
          unhexdigit/1,
@@ -66,14 +68,28 @@ seconds(DateTime) ->
 timestamp({{Y, M, D}, {H, Mi, S}}) ->
     list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S])).
 
+flt(Flt) when is_float(Flt) ->
+    Flt;
+flt(Bin) when is_binary(Bin) ->
+    flt(binary_to_list(Bin));
+flt(Atom) when is_atom(Atom) ->
+    flt(atom_to_list(Atom));
+flt(List) when is_list(List) ->
+    list_to_float(List).
+
 int(Int) when is_integer(Int) ->
     Int;
 int(Bin) when is_binary(Bin) ->
-    list_to_integer(binary_to_list(Bin));
+    int(binary_to_list(Bin));
 int(Atom) when is_atom(Atom) ->
-    list_to_integer(atom_to_list(Atom));
+    int(atom_to_list(Atom));
 int(List) when is_list(List) ->
     list_to_integer(List).
+
+num(Num) when is_number(Num) ->
+    Num;
+num(Any) ->
+    try flt(Any) catch error:badarg -> int(Any) end.
 
 hex(List) when is_list(List) ->
     hex(list_to_binary(List));
