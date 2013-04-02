@@ -155,29 +155,31 @@ last(Tree) ->
 last(Tree, Order) ->
     head(Tree, fun (L) -> lists:reverse(Order(L)) end).
 
-write(Path, Data) ->
-    write(Path, Data, []).
+write(Path, Dump) ->
+    write(Path, Dump, []).
 
-write(Path, Data, Opts) when is_binary(Path) ->
-    write(binary_to_list(Path), Data, Opts);
-write(Path, Data, Opts) ->
+write(Path, Dump, Opts) when is_binary(Path) ->
+    write(binary_to_list(Path), Dump, Opts);
+write(Path, Data, Opts) when is_binary(Data); is_list(Data) ->
+    write(Path, fun (Temp) -> file:write_file(Temp, Data) end, Opts);
+write(Path, Dump, Opts) when is_function(Dump) ->
     Temp = proplists:get_value(temp, Opts, Path ++ ".p"),
     Dirs = proplists:get_value(dirs, Opts, true),
-    case file:write_file(Temp, Data) of
-        ok ->
-            case file:rename(Temp, Path) of
-                ok ->
-                    ok;
-                {error, Error} ->
-                    {error, rename, Error}
-            end;
+    case Dump(Temp) of
         {error, enoent} when Dirs =:= true ->
             case filelib:ensure_dir(Temp) of
                 ok ->
-                    write(Path, Data, Opts);
+                    write(Path, Dump, Opts);
                 {error, Error} ->
-                    {error, mkdir, Error}
+                    {error, {mkdir, Error}}
             end;
         {error, Error} ->
-            {error, write, Error}
+            {error, {write, Error}};
+        Result ->
+            case file:rename(Temp, Path) of
+                ok ->
+                    Result;
+                {error, Error} ->
+                    {error, {rename, Error}}
+            end
     end.
