@@ -14,7 +14,7 @@
          unhexdigit/1,
          urlencode/1,
          quote_plus/1,
-         revjoin/3,
+         join/2,
          lstrip/2,
          rstrip/2,
          strip/2,
@@ -106,36 +106,28 @@ unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
 
 urlencode(Props) ->
-    RevPairs = lists:foldl(fun ({K, V}, Acc) ->
-                                   [[quote_plus(K), $=, quote_plus(V)]|Acc]
-                           end, [], Props),
-    lists:flatten(revjoin(RevPairs, $&, [])).
+    list_to_binary(join([<<(quote_plus(K))/binary, $=, (quote_plus(V))/binary>> || {K, V} <- Props], $&)).
 
 quote_plus(Atom) when is_atom(Atom) ->
     quote_plus(atom_to_list(Atom));
-quote_plus(Bin) when is_binary(Bin) ->
-    quote_plus(binary_to_list(Bin));
 quote_plus(Int) when is_integer(Int) ->
     quote_plus(integer_to_list(Int));
-quote_plus(String) ->
-    quote_plus(String, []).
+quote_plus(IO) ->
+    quote_plus(iolist_to_binary(IO), <<>>).
 
-quote_plus([], Acc) ->
-    lists:reverse(Acc);
-quote_plus([C|Rest], Acc) when ?QS_SAFE(C) ->
-    quote_plus(Rest, [C|Acc]);
-quote_plus([$\s|Rest], Acc) ->
-    quote_plus(Rest, [$+|Acc]);
-quote_plus([C|Rest], Acc) ->
-    <<Hi:4, Lo:4>> = <<C>>,
-    quote_plus(Rest, [hexdigit(Lo), hexdigit(Hi), $\%|Acc]).
-
-revjoin([], _Separator, Acc) ->
+quote_plus(<<>>, Acc) ->
     Acc;
-revjoin([S|Rest], Separator, []) ->
-    revjoin(Rest, Separator, [S]);
-revjoin([S|Rest], Separator, Acc) ->
-    revjoin(Rest, Separator, [S, Separator|Acc]).
+quote_plus(<<C, Rest/binary>>, Acc) when ?QS_SAFE(C) ->
+    quote_plus(Rest, <<Acc/binary, C>>);
+quote_plus(<<$\s, Rest/binary>>, Acc) ->
+    quote_plus(Rest, <<Acc/binary, $+>>);
+quote_plus(<<Hi:4, Lo:4, Rest/binary>>, Acc) ->
+    quote_plus(Rest, <<Acc/binary, $\%, (hexdigit(Hi)), (hexdigit(Lo))>>).
+
+join([A, B|Rest], Sep) ->
+    [A, Sep|join([B|Rest], Sep)];
+join(List, _Sep) ->
+    List.
 
 lstrip([C|Rest], C) ->
     lstrip(Rest, C);
