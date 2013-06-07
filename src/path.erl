@@ -14,6 +14,7 @@
          head/2,
          last/1,
          last/2,
+         rmrf/1,
          write/2,
          write/3]).
 
@@ -154,6 +155,15 @@ last(Tree) ->
 
 last(Tree, Order) ->
     head(Tree, fun (L) -> lists:reverse(Order(L)) end).
+
+rmrf(Path) ->
+    case file:delete(Path) of
+        ok ->
+            ok;
+        {error, eperm} ->
+            ok = foldl(Path, fun (P, ok) -> rmrf(P) end, ok),
+            file:del_dir(Path)
+    end.
 
 write(Path, Dump) ->
     write(Path, Dump, []).
