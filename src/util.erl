@@ -2,6 +2,7 @@
 
 -export([ago/1,
          ago/2,
+         unow/0,
          datetime/1,
          month/1,
          seconds/1,
@@ -27,10 +28,13 @@
                      (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
 
 ago(Seconds) ->
-    ago(calendar:universal_time(), Seconds).
+    ago(unow(), Seconds).
 
 ago(Time, Seconds) ->
     datetime(seconds(Time) - Seconds).
+
+unow() ->
+    calendar:universal_time().
 
 datetime(Seconds) when is_integer(Seconds) ->
     calendar:gregorian_seconds_to_datetime(Seconds);
