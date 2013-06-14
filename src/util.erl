@@ -70,7 +70,9 @@ seconds(DateTime) ->
     calendar:datetime_to_gregorian_seconds(DateTime).
 
 timestamp({{Y, M, D}, {H, Mi, S}}) ->
-    list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S])).
+    list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]));
+timestamp({_, _, _} = Now) ->
+    timestamp(calendar:now_to_universal_time(Now)).
 
 flt(Flt) when is_float(Flt) ->
     Flt;
