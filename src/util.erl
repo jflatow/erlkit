@@ -1,13 +1,6 @@
 -module(util).
 
--export([ago/1,
-         ago/2,
-         unow/0,
-         datetime/1,
-         month/1,
-         seconds/1,
-         timestamp/1,
-         flt/1,
+-export([flt/1,
          int/1,
          num/1,
          hex/1,
@@ -26,53 +19,6 @@
                      (C >= $A andalso C =< $Z) orelse
                      (C >= $0 andalso C =< $9) orelse
                      (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
-
-ago(Seconds) ->
-    ago(unow(), Seconds).
-
-ago(Time, Seconds) ->
-    datetime(seconds(Time) - Seconds).
-
-unow() ->
-    calendar:universal_time().
-
-datetime(Seconds) when is_integer(Seconds) ->
-    calendar:gregorian_seconds_to_datetime(Seconds);
-datetime(<<Y:4/binary, "/", M:2/binary, "/", D:2/binary, " ", H:2/binary, ":", Mi:2/binary, ":", S:2/binary, _/binary>>) ->
-    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
-datetime(<<Y:4/binary, "/", M:2/binary, "/", D:2/binary, _/binary>>) ->
-    {{int(Y), int(M), int(D)}, {0, 0, 0}};
-datetime(<<Y:4/binary, "-", M:2/binary, "-", D:2/binary, " ", H:2/binary, ":", Mi:2/binary, ":", S:2/binary, _/binary>>) ->
-    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
-datetime(<<Y:4/binary, "-", M:2/binary, "-", D:2/binary, _/binary>>) ->
-    {{int(Y), int(M), int(D)}, {0, 0, 0}};
-datetime(_) ->
-    undefined.
-
-month(<<"Jan">>) -> 1;
-month(<<"Feb">>) -> 2;
-month(<<"Mar">>) -> 3;
-month(<<"Apr">>) -> 4;
-month(<<"May">>) -> 5;
-month(<<"Jun">>) -> 6;
-month(<<"Jul">>) -> 7;
-month(<<"Aug">>) -> 8;
-month(<<"Sep">>) -> 9;
-month(<<"Oct">>) -> 10;
-month(<<"Nov">>) -> 11;
-month(<<"Dec">>) -> 12;
-month(Str) when is_list(Str) ->
-    month(list_to_binary(Str)).
-
-seconds(Seconds) when is_integer(Seconds) ->
-    Seconds;
-seconds(DateTime) ->
-    calendar:datetime_to_gregorian_seconds(DateTime).
-
-timestamp({{Y, M, D}, {H, Mi, S}}) ->
-    list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]));
-timestamp({_, _, _} = Now) ->
-    timestamp(calendar:now_to_universal_time(Now)).
 
 flt(Flt) when is_float(Flt) ->
     Flt;

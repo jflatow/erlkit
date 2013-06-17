@@ -20,7 +20,7 @@
          usort/1,
          usort/2]).
 
--import(util, [datetime/1, timestamp/1]).
+-import(util, [parse/1, stamp/1]).
 
 -record(timedb, {root, opts}).
 
@@ -85,13 +85,13 @@ folditems(<<Timestamp:19/binary, " ", A/binary>>, Fun, Acc, N) ->
     [S, B] = binary:split(A, <<" ">>),
     Size = list_to_integer(binary_to_list(S)),
     <<Data:Size/binary, "\n", C/binary>> = B,
-    Time = datetime(Timestamp),
+    Time = parse(Timestamp),
     folditems(C, Fun, Fun({Uniq, Time, Data}, Acc), N + 1).
 
 format(Time, Data) when is_list(Data) ->
     format(Time, iolist_to_binary(Data));
 format(Time, Data) ->
-    io_lib:format("~s ~B ~s~n", [timestamp(Time), size(Data), Data]).
+    io_lib:format("~s ~B ~s~n", [stamp(Time), size(Data), Data]).
 
 items(Path) ->
     folditems(Path, fun (Item, Acc) -> [Item|Acc] end, []).
@@ -124,7 +124,7 @@ nafter(TimeDB, Id, Max) ->
                                     (_, Acc_) ->
                                         Acc_
                                 end, Acc)
-              end, {0, []}, {datetime(Id), undefined}),
+              end, {0, []}, {parse(Id), undefined}),
     lists:sublist(lists:usort(Items_), Max).
 
 nbefore(TimeDB, Id, Max) ->
@@ -139,7 +139,7 @@ nbefore(TimeDB, Id, Max) ->
                                     (_, Acc_) ->
                                         Acc_
                                 end, Acc)
-              end, {0, []}, {datetime(Id), undefined}),
+              end, {0, []}, {parse(Id), undefined}),
     lists:nthtail(max(0, N_ - Max), lists:usort(Items_)).
 
 log(TimeDB, Data) ->
