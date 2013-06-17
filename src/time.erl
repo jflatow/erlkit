@@ -114,9 +114,11 @@ read_rfc3339(time, <<"T", H:2/binary, ":", M:2/binary, ":", S:2/binary, ".", R0/
     {{int(H), int(M), int(S) + int(Frac) / (math:pow(10, size(Frac)))}, R1};
 read_rfc3339(time, <<"T", H:2/binary, ":", M:2/binary, ":", S:2/binary, Rest/binary>>) ->
     {{int(H), int(M), int(S)}, Rest};
-read_rfc3339(offs, <<"Z+", H:2/binary, ":", M:2/binary, Rest/binary>>) ->
+read_rfc3339(offs, <<"Z", Rest/binary>>) ->
+    {{0, 0, 0}, Rest};
+read_rfc3339(offs, <<"+", H:2/binary, ":", M:2/binary, Rest/binary>>) ->
     {{-int(H), -int(M), 0}, Rest};
-read_rfc3339(offs, <<"Z-", H:2/binary, ":", M:2/binary, Rest/binary>>) ->
+read_rfc3339(offs, <<"-", H:2/binary, ":", M:2/binary, Rest/binary>>) ->
     {{int(H), int(M), 0}, Rest};
 read_rfc3339(_, Rest) ->
     {{0, 0, 0}, Rest}.
@@ -127,6 +129,6 @@ stamp(Time) ->
     stamp(datetime(Time)).
 
 stamp({{Y, M, D}, {H, Mi, S}}, rfc3339) ->
-    list_to_binary(io_lib:format("~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ+00:00", [Y, M, D, H, Mi, S]));
+    list_to_binary(io_lib:format("~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ", [Y, M, D, H, Mi, S]));
 stamp(Time, rfc3339) ->
     stamp(datetime(Time)).
