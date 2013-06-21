@@ -2,11 +2,11 @@
 
 -export([ago/1,
          ago/2,
+         pass/2,
          unow/0,
          month/1,
          datetime/1,
          seconds/1,
-         pass/2,
          parse/1,
          parse/2,
          stamp/1,
@@ -25,8 +25,15 @@
 ago(Elapsed) ->
     ago(unow(), Elapsed).
 
+ago(Time, {N, Unit}) when is_integer(N); is_atom(Unit) ->
+    pass(Time, {-N, Unit});
 ago(Time, Elapsed) ->
     datetime(seconds(Time) - seconds(Elapsed)).
+
+pass({{Y, M, D}, {H, Mi, S}}, {N, months}) ->
+    {{Y + N div 12, abs((M + N) rem 12) + 1, D}, {H, Mi, S}};
+pass(Time, Elapse) ->
+    datetime(seconds(Time) + seconds(Elapse)).
 
 unow() ->
     calendar:universal_time().
@@ -57,6 +64,10 @@ datetime({_, _, _} = Now) ->
 datetime({_, _} = DateTime) ->
     DateTime.
 
+seconds({N, years}) ->
+    N * ?Day * 365;
+seconds({N, weeks}) ->
+    N * ?Day * 7;
 seconds({N, days}) ->
     N * ?Day;
 seconds({N, hours}) ->
@@ -73,9 +84,6 @@ seconds({D, {H, M, S}}) when is_float(S) ->
     seconds({D, {H, M, trunc(S)}}) + (S - trunc(S));
 seconds({_, _} = DateTime) ->
     calendar:datetime_to_gregorian_seconds(DateTime).
-
-pass(Time, Elapse) ->
-    datetime(seconds(Time) + seconds(Elapse)).
 
 parse(Timestamp) when is_list(Timestamp) ->
     parse(list_to_binary(Timestamp));
