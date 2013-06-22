@@ -2,6 +2,7 @@
 
 -export([ago/1,
          ago/2,
+         diff/2,
          pass/2,
          unow/0,
          month/1,
@@ -30,6 +31,11 @@ ago(Time, {N, Unit}) when is_integer(N); is_atom(Unit) ->
 ago(Time, Elapsed) ->
     datetime(seconds(Time) - seconds(Elapsed)).
 
+diff(T1, T2) ->
+    seconds(T2) - seconds(T1).
+
+pass({{Y, M, D}, {H, Mi, S}}, {N, years}) ->
+    {{Y + N, M, D}, {H, Mi, S}};
 pass({{Y, M, D}, {H, Mi, S}}, {N, months}) ->
     {{Y + N div 12, abs((M + N) rem 12) + 1, D}, {H, Mi, S}};
 pass(Time, Elapse) ->
@@ -64,8 +70,6 @@ datetime({_, _, _} = Now) ->
 datetime({_, _} = DateTime) ->
     DateTime.
 
-seconds({N, years}) ->
-    N * ?Day * 365;
 seconds({N, weeks}) ->
     N * ?Day * 7;
 seconds({N, days}) ->
