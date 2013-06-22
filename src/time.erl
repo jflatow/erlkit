@@ -16,7 +16,8 @@
 -export([read_rfc3339/1,
          read_rfc3339/2]).
 
--import(util, [int/1]).
+-import(util, [int/1,
+               mod/2]).
 
 -define(Second, 1).
 -define(Minute, 60 * ?Second).
@@ -37,7 +38,14 @@ diff(T1, T2) ->
 pass({{Y, M, D}, {H, Mi, S}}, {N, years}) ->
     {{Y + N, M, D}, {H, Mi, S}};
 pass({{Y, M, D}, {H, Mi, S}}, {N, months}) ->
-    {{Y + N div 12, abs((M + N) rem 12) + 1, D}, {H, Mi, S}};
+    {{case M + N of
+          L when L < 1 -> Y + (L div 12) - 1;
+          L when L > 0 -> Y + (L - 1) div 12
+      end,
+      case mod(M + N, 12) of
+          0 -> 12;
+          O -> O
+      end, D}, {H, Mi, S}};
 pass(Time, Elapse) ->
     datetime(seconds(Time) + seconds(Elapse)).
 

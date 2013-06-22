@@ -1,6 +1,7 @@
 -module(util).
 
--export([flt/1,
+-export([mod/2,
+         flt/1,
          int/1,
          num/1,
          hex/1,
@@ -19,6 +20,11 @@
                      (C >= $A andalso C =< $Z) orelse
                      (C >= $0 andalso C =< $9) orelse
                      (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
+
+mod(X, Y) when X < 0 ->
+    X rem Y + Y;
+mod(X, Y) ->
+    X rem Y.
 
 flt(Flt) when is_float(Flt) ->
     Flt;
