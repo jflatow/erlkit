@@ -3,6 +3,7 @@
 -export([ago/1,
          ago/2,
          diff/2,
+         pass/1,
          pass/2,
          unow/0,
          month/1,
@@ -34,6 +35,9 @@ ago(Time, Elapsed) ->
 
 diff(T1, T2) ->
     seconds(T2) - seconds(T1).
+
+pass(Elapse) ->
+    pass(unow(), Elapse).
 
 pass({{Y, M, D}, {H, Mi, S}}, {N, years}) ->
     {{Y + N, M, D}, {H, Mi, S}};
