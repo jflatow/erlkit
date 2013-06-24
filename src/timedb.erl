@@ -20,7 +20,7 @@
          usort/1,
          usort/2]).
 
--import(util, [parse/1, stamp/1]).
+-import(time, [parse/1, stamp/1]).
 
 -record(timedb, {root, opts}).
 
