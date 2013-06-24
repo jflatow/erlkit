@@ -9,6 +9,7 @@
          unhexdigit/1,
          urlencode/1,
          quote_plus/1,
+         enum/3,
          join/2,
          lstrip/2,
          rstrip/2,
@@ -81,6 +82,11 @@ quote_plus(<<$\s, Rest/binary>>, Acc) ->
     quote_plus(Rest, <<Acc/binary, $+>>);
 quote_plus(<<Hi:4, Lo:4, Rest/binary>>, Acc) ->
     quote_plus(Rest, <<Acc/binary, $\%, (hexdigit(Hi)), (hexdigit(Lo))>>).
+
+enum(Fun, Acc, List) ->
+    element(2, lists:foldl(fun (I, {N, A}) ->
+                                   {N + 1, Fun(N, I, A)}
+                           end, {0, Acc}, List)).
 
 join([A, B|Rest], Sep) ->
     [A, Sep|join([B|Rest], Sep)];
