@@ -22,10 +22,13 @@
                      (C >= $0 andalso C =< $9) orelse
                      (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
 
-mod(X, Y) when X < 0 ->
-    X rem Y + Y;
 mod(X, Y) ->
-    X rem Y.
+    case X rem Y of
+        R when R < 0 ->
+            R + Y;
+        R ->
+            R
+    end.
 
 flt(Flt) when is_float(Flt) ->
     Flt;
