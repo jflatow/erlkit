@@ -143,7 +143,8 @@ json_encode(F, _State) when is_float(F) ->
     num:digits(F);
 json_encode(S, State) when is_binary(S); is_atom(S) ->
     json_encode_string(S, State);
-json_encode([{K, _}|_] = Props, State) when (K =/= struct andalso
+json_encode([{K, _}|_] = Props, State) when (is_binary(K) orelse is_atom(K)),
+                                            (K =/= struct andalso
                                              K =/= array andalso
                                              K =/= json) ->
     json_encode_proplist(Props, State);
