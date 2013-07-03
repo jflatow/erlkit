@@ -177,13 +177,16 @@ json_encode_array(L, State) ->
 json_encode_proplist([], _State) ->
     <<"{}">>;
 json_encode_proplist(Props, State) ->
-    F = fun ({K, V}, Acc) ->
-                KS = json_encode_string(K, State),
-                VS = json_encode(V, State),
-                [$,, VS, $:, KS | Acc]
-        end,
-    [$, | Acc1] = lists:foldl(F, "{", Props),
-    lists:reverse([$\} | Acc1]).
+    [${, json_encode_props(Props, State), $}].
+
+json_encode_props([{_, undefined}|Rest], S) ->
+    json_encode_props(Rest, S);
+json_encode_props([{K, V}, B|Rest], S) ->
+    [json_encode_string(K, S), $:, json_encode(V, S), $,|json_encode_props([B|Rest], S)];
+json_encode_props([{K, V}], S) ->
+    [json_encode_string(K, S), $:, json_encode(V, S)];
+json_encode_props([], _) ->
+    [].
 
 json_encode_string(A, State) when is_atom(A) ->
     L = atom_to_list(A),
