@@ -181,6 +181,8 @@ json_encode_proplist(Props, State) ->
 
 json_encode_props([{_, undefined}|Rest], S) ->
     json_encode_props(Rest, S);
+json_encode_props([A, {_, undefined}|Rest], S) ->
+    json_encode_props([A|Rest], S);
 json_encode_props([{K, V}, B|Rest], S) ->
     [json_encode_string(K, S), $:, json_encode(V, S), $,|json_encode_props([B|Rest], S)];
 json_encode_props([{K, V}], S) ->
