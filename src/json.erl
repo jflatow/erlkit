@@ -190,6 +190,8 @@ json_encode_props([{K, V}], S) ->
 json_encode_props([], _) ->
     [].
 
+json_encode_string(undefined, _State) ->
+    <<"null">>;
 json_encode_string(A, State) when is_atom(A) ->
     L = atom_to_list(A),
     case json_string_is_safe(L) of
