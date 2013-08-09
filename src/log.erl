@@ -77,7 +77,7 @@ since(Log, Id) ->
 
 init([Root, Opts]) ->
     Depth = proplists:get_value(depth, Opts, 2),
-    Limit = proplists:get_value(limit, Opts, 64 bsl 20),
+    Limit = proplists:get_value(limit, Opts, 8 bsl 20),
     Last = last(Root, Depth),
     Path = rel(Root, Last),
     case file(Last) of
