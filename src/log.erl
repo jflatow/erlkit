@@ -52,13 +52,19 @@ foldl(Log, Fun, Acc) ->
 
 foldl(Log, Fun, Acc, {I1, I2}) ->
     case gen_server:call(Log, state) of
-        #state{root=Root} = State ->
-            Lower = {PLo, _} = lower(State, I1),
-            Upper = {PHi, _} = upper(State, I2),
-            path:foldl(Root,
-                       fun (P, A) ->
-                               foldentries(P, Fun, A, {Lower, Upper})
-                       end, Acc, {PLo, filename:join(PHi, "~")})
+        #state{root=Root, path=Path, offs=Offs} = S ->
+            Lower = {PLo, _} = lower(S, I1),
+            Upper = {PHi, _} = upper(S, I2),
+            Range = {filename:join(Root, PLo), filename:join([Root, PHi, "~"])},
+            case Lower >= {Path, Offs} of
+                true ->
+                    Acc;
+                false ->
+                    path:foldl(Root,
+                               fun (P, A) ->
+                                       foldentries({P, rel(Root, P)}, Fun, A, {Lower, Upper})
+                               end, Acc, Range)
+            end
     end.
 
 range(Log, Range) ->
@@ -73,7 +79,7 @@ init([Root, Opts]) ->
     Depth = proplists:get_value(depth, Opts, 2),
     Limit = proplists:get_value(limit, Opts, 64 bsl 20),
     Last = last(Root, Depth),
-    Path = util:strip(util:disfix(Root, Last), $/),
+    Path = rel(Root, Last),
     case file(Last) of
         {ok, File} ->
             case do(verify, #state{root=Root,
@@ -142,20 +148,23 @@ path_to_int(Path, Depth, Base) ->
                                    {Pow div Unit, Int + list_to_integer(B, Base) * Pow}
                            end, {num:pow(Unit, Depth - 1), 0}, filename:split(Path))).
 
+rel(Root, Path) ->
+    str(util:strip(util:disfix(Root, Path), $/)).
+
 str(List) when is_list(List) ->
     List;
 str(Bin) when is_binary(Bin) ->
     binary_to_list(Bin).
 
 lower(#state{root=Root}, undefined) ->
-    {str(path:head(Root)), ?OZero};
-lower(#state{root=Root}, {Path, Offs}) ->
-    {str(filename:join(Root, Path)), Offs}.
+    {str(util:disfix(Root, path:head(Root))), ?OZero};
+lower(_, {Path, Offs}) ->
+    {str(Path), Offs}.
 
-upper(#state{root=Root, path=Path, offs=Offs}, undefined) ->
-    {str(filename:join(Root, Path)), Offs};
-upper(#state{root=Root}, {Path, Offs}) ->
-    {str(filename:join(Root, Path)), Offs}.
+upper(#state{path=Path, offs=Offs}, undefined) ->
+    {str(Path), Offs};
+upper(_, {Path, Offs}) ->
+    {str(Path), Offs}.
 
 last(Root, Depth) ->
     case path:last(Root) of
@@ -212,12 +221,12 @@ entry(File, Offs) ->
             {error, badentry}
     end.
 
-foldentries(Path, Fun, Acc, Range) ->
-    case file:open(Path, [read, raw, binary]) of
+foldentries({Abs, Rel}, Fun, Acc, Range) ->
+    case file:open(Abs, [read, raw, binary]) of
         {ok, File} ->
             case file:position(File, ?OZero) of
                 {ok, Offs} ->
-                    foldentries(File, {Path, Offs}, Fun, Acc, Range);
+                    foldentries(File, {Rel, Offs}, Fun, Acc, Range);
                 {error, Reason} ->
                     {stop, {error, {position, Reason}}}
             end;
@@ -227,16 +236,16 @@ foldentries(Path, Fun, Acc, Range) ->
 
 foldentries(_, Id, _, Acc, {_, Upper}) when Id >= Upper ->
     {stop, Acc};
-foldentries(File, {Path, Offs} = Id, Fun, Acc, {Lower, _} = Range) ->
+foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range) ->
     case entry(File, Offs) of
         {error, badentry} ->
             Acc;
         {error, _} = Error ->
             {stop, Error};
         {_, Next} when Id < Lower ->
-            foldentries(File, {Path, Next}, Fun, Acc, Range);
+            foldentries(File, {Rel, Next}, Fun, Acc, Range);
         {Data, Next} ->
-            foldentries(File, {Path, Next}, Fun, Fun({Id, Data}, Acc), Range)
+            foldentries(File, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range)
     end.
 
 %% internal
@@ -304,7 +313,7 @@ do(verify, #state{file=File} = State) ->
     end;
 
 do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, limit=L} = State) when O >= L ->
-    Path = int_to_path(path_to_int(P, D) + 1, D),
+    Path = str(int_to_path(path_to_int(P, D) + 1, D)),
     case file:close(F) of
         ok ->
             case file(filename:join(R, Path)) of
@@ -323,9 +332,10 @@ do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, limit=L} = St
     end;
 do({write, Entry}, #state{file=File, path=Path, offs=Offs} = State) ->
     Size = size(Entry),
+    Next = Offs + Size + 5,
     case file:write(File, <<Size:32, Entry/binary, "\n">>) of
         ok ->
-            {{Path, Offs}, State#state{offs=Offs + Size + 5}};
+            {{ok, {{Path, Offs}, {Path, Next}}}, State#state{offs=Next}};
         Error ->
             {Error, State}
     end.
