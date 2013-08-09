@@ -303,18 +303,23 @@ do(verify, #state{file=File} = State) ->
             end
     end;
 
-do({write, Entry}, #state{root=R, path=P, offs=O, depth=D, limit=L} = State) when O >= L ->
+do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, limit=L} = State) when O >= L ->
     Path = int_to_path(path_to_int(P, D) + 1, D),
-    case file(filename:join(R, Path)) of
-        {ok, File} ->
-            case do(verify, State#state{path=Path, file=File}) of
-                {ok, S} ->
-                    do({write, Entry}, S);
+    case file:close(F) of
+        ok ->
+            case file(filename:join(R, Path)) of
+                {ok, File} ->
+                    case do(verify, State#state{path=Path, file=File}) of
+                        {ok, S} ->
+                            do({write, Entry}, S);
+                        Error ->
+                            {Error, State}
+                    end;
                 Error ->
                     {Error, State}
             end;
-        Error ->
-            {Error, State}
+        {error, Reason} ->
+            {error, {close, Reason}, State}
     end;
 do({write, Entry}, #state{file=File, path=Path, offs=Offs} = State) ->
     Size = size(Entry),
