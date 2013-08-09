@@ -97,7 +97,7 @@ handle_call({do, close}, _From, #state{file=File} = State) ->
         {ok, S} ->
             case file:close(File) of
                 ok ->
-                    {stop, closed, ok, S};
+                    {stop, normal, ok, S};
                 Error ->
                     {reply, Error, S}
             end;
