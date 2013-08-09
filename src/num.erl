@@ -11,7 +11,7 @@
 
 -module(num).
 -author("Bob Ippolito <bob@mochimedia.com>").
--export([digits/1, frexp/1, int_pow/2, int_ceil/1]).
+-export([digits/1, frexp/1, pow/2, ceil/1]).
 
 %% IEEE 754 Float exponent bias
 -define(FLOAT_BIAS, 1022).
@@ -47,20 +47,20 @@ digits(Float) ->
 frexp(F) ->
     frexp1(unpack(F)).
 
-%% @spec int_pow(X::integer(), N::integer()) -> Y::integer()
+%% @spec pow(X::integer(), N::integer()) -> Y::integer()
 %% @doc  Moderately efficient way to exponentiate integers.
-%%       int_pow(10, 2) = 100.
-int_pow(_X, 0) ->
+%%       pow(10, 2) = 100.
+pow(_, 0) ->
     1;
-int_pow(X, N) when N > 0 ->
-    int_pow(X, N, 1).
+pow(X, N) when N > 0 ->
+    pow(X, N, 1).
 
-%% @spec int_ceil(F::float()) -> integer()
+%% @spec ceil(F::float()) -> integer()
 %% @doc  Return the ceiling of F as an integer. The ceiling is defined as
 %%       F when F == trunc(F);
 %%       trunc(F) when F &lt; 0;
 %%       trunc(F) + 1 when F &gt; 0.
-int_ceil(X) ->
+ceil(X) ->
     T = trunc(X),
     case (X - T) of
         Pos when Pos > 0 -> T + 1;
@@ -70,10 +70,10 @@ int_ceil(X) ->
 
 %% Internal API
 
-int_pow(X, N, R) when N < 2 ->
+pow(X, N, R) when N < 2 ->
     R * X;
-int_pow(X, N, R) ->
-    int_pow(X * X, N bsr 1, case N band 1 of 1 -> R * X; 0 -> R end).
+pow(X, N, R) ->
+    pow(X * X, N bsr 1, case N band 1 of 1 -> R * X; 0 -> R end).
 
 insert_decimal(0, S) ->
     "0." ++ S;
@@ -138,15 +138,15 @@ digits1(Float, Exp, Frac) ->
     end.
 
 scale(R, S, MPlus, MMinus, LowOk, HighOk, Float) ->
-    Est = int_ceil(math:log10(abs(Float)) - 1.0e-10),
+    Est = ceil(math:log10(abs(Float)) - 1.0e-10),
     %% Note that the scheme implementation uses a 326 element look-up table
-    %% for int_pow(10, N) where we do not.
+    %% for pow(10, N) where we do not.
     case Est >= 0 of
         true ->
-            fixup(R, S * int_pow(10, Est), MPlus, MMinus, Est,
+            fixup(R, S * pow(10, Est), MPlus, MMinus, Est,
                   LowOk, HighOk);
         false ->
-            Scale = int_pow(10, -Est),
+            Scale = pow(10, -Est),
             fixup(R * Scale, S, MPlus * Scale, MMinus * Scale, Est,
                   LowOk, HighOk)
     end.
@@ -246,22 +246,22 @@ frexp_int(F) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-int_ceil_test() ->
-    ?assertEqual(1, int_ceil(0.0001)),
-    ?assertEqual(0, int_ceil(0.0)),
-    ?assertEqual(1, int_ceil(0.99)),
-    ?assertEqual(1, int_ceil(1.0)),
-    ?assertEqual(-1, int_ceil(-1.5)),
-    ?assertEqual(-2, int_ceil(-2.0)),
+ceil_test() ->
+    ?assertEqual(1, ceil(0.0001)),
+    ?assertEqual(0, ceil(0.0)),
+    ?assertEqual(1, ceil(0.99)),
+    ?assertEqual(1, ceil(1.0)),
+    ?assertEqual(-1, ceil(-1.5)),
+    ?assertEqual(-2, ceil(-2.0)),
     ok.
 
-int_pow_test() ->
-    ?assertEqual(1, int_pow(1, 1)),
-    ?assertEqual(1, int_pow(1, 0)),
-    ?assertEqual(1, int_pow(10, 0)),
-    ?assertEqual(10, int_pow(10, 1)),
-    ?assertEqual(100, int_pow(10, 2)),
-    ?assertEqual(1000, int_pow(10, 3)),
+pow_test() ->
+    ?assertEqual(1, pow(1, 1)),
+    ?assertEqual(1, pow(1, 0)),
+    ?assertEqual(1, pow(10, 0)),
+    ?assertEqual(10, pow(10, 1)),
+    ?assertEqual(100, pow(10, 2)),
+    ?assertEqual(1000, pow(10, 3)),
     ok.
 
 digits_test() ->

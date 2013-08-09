@@ -11,6 +11,7 @@
          quote_plus/1,
          enum/3,
          join/2,
+         disfix/2,
          lstrip/2,
          rstrip/2,
          strip/2,
@@ -95,6 +96,21 @@ join([A, B|Rest], Sep) ->
     [A, Sep|join([B|Rest], Sep)];
 join(List, _Sep) ->
     List.
+
+disfix(Prefix, Str) when is_list(Str), is_binary(Prefix) ->
+    disfix(binary_to_list(Prefix), Str);
+disfix(Prefix, Str) when is_list(Str) ->
+    Str -- Prefix;
+disfix(Prefix, Bin) when is_binary(Bin), is_list(Prefix) ->
+    disfix(list_to_binary(Prefix), Bin);
+disfix(Prefix, Bin) when is_binary(Bin) ->
+    Size = size(Prefix),
+    case Bin of
+        <<Prefix:Size/binary, Rest/binary>> ->
+            Rest;
+        _ ->
+            Bin
+    end.
 
 lstrip([C|Rest], C) ->
     lstrip(Rest, C);
