@@ -8,8 +8,11 @@
          write/3,
          foldl/3,
          foldl/4,
+         foldl/5,
          range/2,
-         since/2]).
+         range/3,
+         since/2,
+         since/3]).
 
 -behavior(gen_server).
 -export([init/1,
@@ -51,6 +54,10 @@ foldl(Log, Fun, Acc) ->
     foldl(Log, Fun, Acc, {undefined, undefined}).
 
 foldl(Log, Fun, Acc, {I1, I2}) ->
+    foldl(Log, Fun, Acc, {I1, I2}, []).
+
+foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
+    Mode = proplists:get_value(mode, Opts, safe),
     case gen_server:call(Log, state) of
         #state{root=Root, path=Path, offs=Offs} = S ->
             Lower = {PLo, _} = lower(S, I1),
@@ -62,16 +69,22 @@ foldl(Log, Fun, Acc, {I1, I2}) ->
                 false ->
                     path:foldl(Root,
                                fun (P, A) ->
-                                       foldentries({P, rel(Root, P)}, Fun, A, {Lower, Upper})
+                                       foldpath({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Mode)
                                end, Acc, Range)
             end
     end.
 
 range(Log, Range) ->
-    foldl(Log, fun (Item, Acc) -> [Item|Acc] end, [], Range).
+    range(Log, Range, []).
+
+range(Log, Range, Opts) ->
+    foldl(Log, fun (Item, Acc) -> [Item|Acc] end, [], Range, Opts).
 
 since(Log, Id) ->
-    range(Log, {Id, undefined}).
+    since(Log, Id, []).
+
+since(Log, Id, Opts) ->
+    range(Log, {Id, undefined}, Opts).
 
 %% gen_server
 
@@ -221,10 +234,10 @@ entry(File, Offs) ->
             {error, badentry}
     end.
 
-foldentries({Abs, Rel}, Fun, Acc, Range) ->
+foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
     case file:open(Abs, [read, raw, binary]) of
         {ok, File} ->
-            case file:position(File, ?OZero) of
+            case file:position(File, Start) of
                 {ok, Offs} ->
                     foldentries(File, {Rel, Offs}, Fun, Acc, Range);
                 {error, Reason} ->
@@ -232,7 +245,11 @@ foldentries({Abs, Rel}, Fun, Acc, Range) ->
             end;
         Error ->
             {stop, Error}
-    end.
+    end;
+foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, rash) ->
+    foldpath({Abs, Rel}, Fun, Acc, Range, OLo);
+foldpath({Abs, Rel}, Fun, Acc, Range, _) ->
+    foldpath({Abs, Rel}, Fun, Acc, Range, ?OZero).
 
 foldentries(_, Id, _, Acc, {_, Upper}) when Id >= Upper ->
     {stop, Acc};
