@@ -79,6 +79,9 @@ b64e(X) ->
              $0, $1, $2, $3, $4, $5, $6, $7, $8, $9, $-, $_}).
 
 b64d(X) ->
-    b64d_ok(element(X, ?DECODE_MAP)).
+    b64d(X, element(X, ?DECODE_MAP)).
 
-b64d_ok(I) when is_integer(I) -> I.
+b64d(_, I) when is_integer(I) ->
+    I;
+b64d(X, bad) ->
+    throw({bad, X}).
