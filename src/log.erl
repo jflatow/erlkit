@@ -4,6 +4,7 @@
          open/2,
          close/1,
          flush/1,
+         locus/1,
          write/2,
          write/3,
          foldl/3,
@@ -41,6 +42,12 @@ close(Log) ->
 
 flush(Log) ->
     gen_server:call(Log, {do, flush}).
+
+locus(Log) ->
+    case gen_server:call(Log, state) of
+        #state{path=Path, offs=Offs} ->
+            {Path, Offs}
+    end.
 
 write(Log, Entry) ->
     write(Log, Entry, cast).
