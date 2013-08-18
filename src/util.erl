@@ -9,6 +9,7 @@
          unhexdigit/1,
          urlencode/1,
          quote_plus/1,
+         unquote/1,
          enum/3,
          join/2,
          disfix/2,
@@ -82,10 +83,24 @@ quote_plus(<<>>, Acc) ->
     Acc;
 quote_plus(<<C, Rest/binary>>, Acc) when ?QS_SAFE(C) ->
     quote_plus(Rest, <<Acc/binary, C>>);
-quote_plus(<<$\s, Rest/binary>>, Acc) ->
-    quote_plus(Rest, <<Acc/binary, $+>>);
+quote_plus(<<" ", Rest/binary>>, Acc) ->
+    quote_plus(Rest, <<Acc/binary, "+">>);
 quote_plus(<<Hi:4, Lo:4, Rest/binary>>, Acc) ->
-    quote_plus(Rest, <<Acc/binary, $\%, (hexdigit(Hi)), (hexdigit(Lo))>>).
+    quote_plus(Rest, <<Acc/binary, "%", (hexdigit(Hi)), (hexdigit(Lo))>>).
+
+unquote(String) when is_list(String) ->
+    unquote(list_to_binary(String));
+unquote(Binary) ->
+    unquote(Binary, <<>>).
+
+unquote(<<>>, Acc) ->
+    Acc;
+unquote(<<"+", Rest/binary>>, Acc) ->
+    unquote(Rest, <<Acc/binary, " ">>);
+unquote(<<"%", Hi, Lo, Rest/binary>>, Acc) ->
+    unquote(Rest, <<Acc/binary, (unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4))>>);
+unquote(<<C, Rest/binary>>, Acc) ->
+    unquote(Rest, <<Acc/binary, C>>).
 
 enum(Fun, Acc, List) ->
     element(2, lists:foldl(fun (I, {N, A}) ->
