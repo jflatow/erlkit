@@ -195,7 +195,7 @@ last(Root, Depth) ->
     end.
 
 file(Path) ->
-    case file:open(Path, [read, append, raw, binary]) of
+    case file:open(Path, [read, write, raw, binary]) of
         {ok, File} ->
             {ok, File};
         {error, enoent} ->
@@ -357,7 +357,7 @@ do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, limit=L} = St
 do({write, Entry}, #state{file=File, path=Path, offs=Offs} = State) ->
     Size = size(Entry),
     Next = Offs + Size + 5,
-    case file:write(File, <<Size:32, Entry/binary, "\n">>) of
+    case file:pwrite(File, Offs, <<Size:32, Entry/binary, "\n">>) of
         ok ->
             {{ok, {{Path, Offs}, {Path, Next}}}, State#state{offs=Next}};
         Error ->
