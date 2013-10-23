@@ -6,7 +6,6 @@
          pass/1,
          pass/2,
          unow/0,
-         month/1,
          datetime/1,
          seconds/1,
          parse/1,
@@ -55,21 +54,6 @@ pass(Time, Elapse) ->
 
 unow() ->
     calendar:universal_time().
-
-month(<<"Jan">>) -> 1;
-month(<<"Feb">>) -> 2;
-month(<<"Mar">>) -> 3;
-month(<<"Apr">>) -> 4;
-month(<<"May">>) -> 5;
-month(<<"Jun">>) -> 6;
-month(<<"Jul">>) -> 7;
-month(<<"Aug">>) -> 8;
-month(<<"Sep">>) -> 9;
-month(<<"Oct">>) -> 10;
-month(<<"Nov">>) -> 11;
-month(<<"Dec">>) -> 12;
-month(Str) when is_list(Str) ->
-    month(list_to_binary(Str)).
 
 datetime(Seconds) when is_integer(Seconds) ->
     calendar:gregorian_seconds_to_datetime(Seconds);
