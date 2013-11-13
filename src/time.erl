@@ -8,6 +8,7 @@
          unow/0,
          datetime/1,
          seconds/1,
+         range/1,
          parse/1,
          parse/2,
          stamp/1,
@@ -84,6 +85,15 @@ seconds({D, {H, M, S}}) when is_float(S) ->
     seconds({D, {H, M, trunc(S)}}) + (S - trunc(S));
 seconds({_, _} = DateTime) ->
     calendar:datetime_to_gregorian_seconds(DateTime).
+
+range({Start, {{_, _, _}, {_, _, _}} = Stop}) ->
+    range({Start, Stop, {1, days}});
+range({Start, Duration}) ->
+    range({Start, time:pass(Start, Duration)});
+range({Start, Stop, Step}) when Start < Stop ->
+    [Start|range({time:pass(Start, Step), Stop, Step})];
+range({_, _, _}) ->
+    [].
 
 parse(Timestamp) when is_list(Timestamp) ->
     parse(list_to_binary(Timestamp));
