@@ -244,12 +244,18 @@ entry(File, Offs) ->
 foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
     case file:open(Abs, [read, raw, binary]) of
         {ok, File} ->
-            case file:position(File, Start) of
-                {ok, Offs} ->
-                    foldentries(File, {Rel, Offs}, Fun, Acc, Range);
-                {error, Reason} ->
-                    {stop, {error, {position, Reason}}}
-            end;
+            Result = case file:position(File, Start) of
+                         {ok, Offs} ->
+                             foldentries(File, {Rel, Offs}, Fun, Acc, Range);
+                         {error, EPosition} ->
+                             {stop, {error, {position, EPosition}}}
+                     end,
+            _Maybe = case file:close(File) of
+                         ok ->
+                             Result;
+                         {error, EClose} ->
+                             {stop, {error, {close, EClose}}}
+                     end;
         Error ->
             {stop, Error}
     end;
