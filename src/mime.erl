@@ -11,21 +11,22 @@
          content_transfer_encoding/1,
          decode/1,
          decode/2,
+         encode/1,
+         encode/2,
          split_headers/1,
          split_parts/1]).
 
 -define(CRLF, "\r\n").
 -define(Q, "\"").
+-define(IS_NONPRINTABLE(C), (C < 32 orelse
+                             C >= 127 orelse
+                             C =:= $= orelse
+                             C =:= $.)).
 
 lower(Bin) when is_binary(Bin) ->
     lower(binary_to_list(Bin));
 lower(Str) when is_list(Str) ->
     string:to_lower(Str).
-
-unhex(C) when C >= $0, C =< $9 -> C - $0;
-unhex(C) when C >= $a, C =< $f -> C - $a + 10;
-unhex(C) when C >= $A, C =< $F -> C - $A + 10;
-unhex(C) -> throw({enohex, C}).
 
 read_quoted(<<?Q, Rest/binary>>) ->
     read_quoted(Rest, <<>>).
@@ -86,10 +87,29 @@ decode(_, Body) ->
 decode("quoted-printable", <<"=", ?CRLF, Rest/binary>>, Acc) ->
     decode("quoted-printable", Rest, Acc);
 decode("quoted-printable", <<"=", H1, H2, Rest/binary>>, Acc) ->
-    decode("quoted-printable", Rest, <<Acc/binary, (unhex(H1) * 16 + unhex(H2))>>);
+    decode("quoted-printable", Rest, <<Acc/binary, (util:unhexdigit(H1) * 16 + util:unhexdigit(H2))>>);
 decode("quoted-printable", <<C, Rest/binary>>, Acc) ->
     decode("quoted-printable", Rest, <<Acc/binary, C>>);
 decode("quoted-printable", <<>>, Acc) ->
+    Acc.
+
+encode({Headers, Body}) ->
+    encode(content_transfer_encoding(Headers), Body).
+
+encode("base64", Body) ->
+    base64:encode(Body);
+encode("quoted-printable", Body) ->
+    encode("quoted-printable", Body, <<>>);
+encode(_, Body) ->
+    Body.
+
+encode("quoted-printable", <<C, Body/binary>>, Acc) when ?IS_NONPRINTABLE(C) ->
+    H1 = util:hexdigit(C div 16),
+    H2 = util:hexdigit(C rem 16),
+    encode("quoted-printable", Body, <<Acc/binary, $=, H1, H2>>);
+encode("quoted-printable", <<C, Body/binary>>, Acc) ->
+    encode("quoted-printable", Body, <<Acc/binary, C>>);
+encode("quoted-printable", <<>>, Acc) ->
     Acc.
 
 split_headers(Message) ->
@@ -155,18 +175,18 @@ parse(header, Buffer, Line) ->
             throw({invalid_header, Invalid})
     end.
 
-format({Headers, Body}) ->
-    <<(<< <<(format(header, H))/binary, ?CRLF>> || H <- Headers >>)/binary, ?CRLF, (format(body, Body))/binary>>.
+format({Headers, _} = HB) ->
+    <<(<< <<(format(header, H))/binary, ?CRLF>> || H <- Headers >>)/binary, ?CRLF, (format(body, HB))/binary>>.
 
 format(header, {Field, Value}) ->
     <<(util:bin(Field))/binary, ":", (util:bin(Value))/binary>>;
 
-format(body, {Preamble, Parts, Epilogue, Boundary}) ->
+format(body, {_Headers, {Preamble, Parts, Epilogue, Boundary}}) ->
     <<Preamble/binary,
      (<< <<"--", Boundary/binary, ?CRLF, (format(P))/binary>> || P <- Parts >>)/binary,
      "--", Boundary/binary, "--",
      Epilogue/binary>>;
-format(body, {Parts, Boundary}) ->
-    format(body, {<<>>, Parts, <<>>, Boundary});
-format(body, Body) ->
-    iolist_to_binary(Body).
+format(body, {Headers, {Parts, Boundary}}) ->
+    format(body, {Headers, {<<>>, Parts, <<>>, Boundary}});
+format(body, HB) ->
+    iolist_to_binary(encode(HB)).

@@ -42,7 +42,7 @@ bin(Int) when is_integer(Int) ->
 bin(Atom) when is_atom(Atom) ->
     bin(atom_to_list(Atom));
 bin(List) when is_list(List) ->
-    list_to_binary(List).
+    iolist_to_binary(List).
 
 flt(Flt) when is_float(Flt) ->
     Flt;
