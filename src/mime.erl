@@ -3,7 +3,9 @@
 %% Basic MIME parsing (RFC 2822)
 
 -export([parse/1,
-         format/1]).
+         parse/3,
+         format/1,
+         format/2]).
 
 -export([content_type/1,
          content_transfer_encoding/1,
@@ -90,17 +92,6 @@ decode("quoted-printable", <<C, Rest/binary>>, Acc) ->
 decode("quoted-printable", <<>>, Acc) ->
     Acc.
 
-format_header({Field, Value}) ->
-    <<(util:bin(Field))/binary, ":", (util:bin(Value))/binary>>.
-
-parse_header(Buffer, Line) ->
-    case binary:split(<<Buffer/binary, Line/binary>>, <<":">>) of
-        [Field, Value] ->
-            {lower(Field), Value};
-        [Invalid] ->
-            throw({invalid_header, Invalid})
-    end.
-
 split_headers(Message) ->
     split_headers(Message, []).
 
@@ -112,13 +103,13 @@ split_headers(Message, Headers, Buffer) ->
         [<<>>, Body] when Headers =:= [] ->
             {[], Body};
         [Line, <<>>] ->
-            {lists:reverse([parse_header(Buffer, Line)|Headers]), <<>>};
+            {lists:reverse([parse(header, Buffer, Line)|Headers]), <<>>};
         [Line, <<?CRLF, Body/binary>>] ->
-            {lists:reverse([parse_header(Buffer, Line)|Headers]), Body};
+            {lists:reverse([parse(header, Buffer, Line)|Headers]), Body};
         [Line, <<Space, Rest/binary>>] when Space =:= 9; Space =:= 32 ->
             split_headers(Rest, Headers, <<Buffer/binary, Line/binary, ?CRLF, Space>>);
         [Line, Rest] ->
-            split_headers(Rest, [parse_header(Buffer, Line)|Headers])
+            split_headers(Rest, [parse(header, Buffer, Line)|Headers])
     end.
 
 split_parts({Headers, Body}) ->
@@ -156,13 +147,26 @@ parse(Message) ->
              end
      end}.
 
-format({Headers, {Preamble, Parts, Epilogue, Boundary}}) ->
-    <<(<< <<(format_header(H))/binary, ?CRLF>> || H <- Headers >>)/binary, ?CRLF,
-     Preamble/binary,
+parse(header, Buffer, Line) ->
+    case binary:split(<<Buffer/binary, Line/binary>>, <<":">>) of
+        [Field, Value] ->
+            {lower(Field), Value};
+        [Invalid] ->
+            throw({invalid_header, Invalid})
+    end.
+
+format({Headers, Body}) ->
+    <<(<< <<(format(header, H))/binary, ?CRLF>> || H <- Headers >>)/binary, ?CRLF, (format(body, Body))/binary>>.
+
+format(header, {Field, Value}) ->
+    <<(util:bin(Field))/binary, ":", (util:bin(Value))/binary>>;
+
+format(body, {Preamble, Parts, Epilogue, Boundary}) ->
+    <<Preamble/binary,
      (<< <<"--", Boundary/binary, ?CRLF, (format(P))/binary>> || P <- Parts >>)/binary,
      "--", Boundary/binary, "--",
      Epilogue/binary>>;
-format({Headers, {Parts, Boundary}}) ->
-    format({Headers, {<<>>, Parts, <<>>, Boundary}});
-format({Headers, Body}) ->
-    <<(<< <<(format_header(H))/binary, ?CRLF>> || H <- Headers >>)/binary, ?CRLF, Body/binary>>.
+format(body, {Parts, Boundary}) ->
+    format(body, {<<>>, Parts, <<>>, Boundary});
+format(body, Body) when is_binary(Body) ->
+    Body.
