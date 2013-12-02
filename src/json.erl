@@ -803,9 +803,6 @@ key_encode_test() ->
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode([{<<"foo">>, 1}]))),
     ?assertEqual(
-       <<"{\"foo\":1}">>,
-       iolist_to_binary(encode([{"foo", 1}]))),
-    ?assertEqual(
        <<"{\"\\ud834\\udd20\":1}">>,
        iolist_to_binary(
          encode({struct, [{[16#0001d120], 1}]}))),

@@ -1,6 +1,7 @@
 -module(util).
 
 -export([mod/2,
+         bin/1,
          flt/1,
          int/1,
          num/1,
@@ -31,6 +32,17 @@ mod(X, Y) ->
         R ->
             R
     end.
+
+bin(Bin) when is_binary(Bin) ->
+    Bin;
+bin(Flt) when is_float(Flt) ->
+    bin(float_to_list(Flt));
+bin(Int) when is_integer(Int) ->
+    bin(integer_to_list(Int));
+bin(Atom) when is_atom(Atom) ->
+    bin(atom_to_list(Atom));
+bin(List) when is_list(List) ->
+    list_to_binary(List).
 
 flt(Flt) when is_float(Flt) ->
     Flt;
