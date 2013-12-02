@@ -187,6 +187,6 @@ format(body, {_Headers, {Preamble, Parts, Epilogue, Boundary}}) ->
      "--", Boundary/binary, "--",
      Epilogue/binary>>;
 format(body, {Headers, {Parts, Boundary}}) ->
-    format(body, {Headers, {<<>>, Parts, <<>>, Boundary}});
+    format(body, {Headers, {<<>>, Parts, <<?CRLF>>, Boundary}});
 format(body, HB) ->
     iolist_to_binary(encode(HB)).
