@@ -168,5 +168,5 @@ format(body, {Preamble, Parts, Epilogue, Boundary}) ->
      Epilogue/binary>>;
 format(body, {Parts, Boundary}) ->
     format(body, {<<>>, Parts, <<>>, Boundary});
-format(body, Body) when is_binary(Body) ->
-    Body.
+format(body, Body) ->
+    iolist_to_binary(Body).
