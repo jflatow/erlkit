@@ -13,6 +13,7 @@
          unquote/1,
          enum/3,
          join/2,
+         join/3,
          disfix/2,
          lstrip/2,
          rstrip/2,
@@ -122,6 +123,15 @@ enum(Fun, Acc, List) ->
 join([A, B|Rest], Sep) ->
     [A, Sep|join([B|Rest], Sep)];
 join(List, _Sep) ->
+    List.
+
+join([A|Rest], Sep, A) ->
+    join(Rest, Sep, A);
+join([A, B|Rest], Sep, B) ->
+    join([A|Rest], Sep, B);
+join([A, B|Rest], Sep, Skip) ->
+    [A, Sep|join([B|Rest], Sep, Skip)];
+join(List, _Sep, _Skip) ->
     List.
 
 disfix(Prefix, Str) when is_list(Str), is_binary(Prefix) ->

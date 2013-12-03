@@ -3,7 +3,12 @@
 %% General parsing
 -export([parse/1,
          parse/2,
-         unfold/1]).
+         format/1,
+         format/2]).
+
+%% ical specific folding (wrapping)
+-export([unfold/1,
+         fold/1]).
 
 %% Recurrence manipulation
 -export([rrule/1,
@@ -15,6 +20,11 @@
          expand/3,
          filter/3,
          finite/1]).
+
+-import(util, [bin/1,
+               int/1,
+               join/2,
+               join/3]).
 
 %% NB: BYYEARDAY, BYWEEKNO, BYSETPOS not yet supported
 -record(rrule, {freq,
@@ -44,9 +54,6 @@
                       X =:= <<"FR">> orelse
                       X =:= <<"SA">> orelse
                       X =:= <<"SU">>)).
-
-int(Bin) ->
-    list_to_integer(binary_to_list(Bin)).
 
 parse(Content) ->
     parse(calendar, [parse(prop, Line) || Line <- unfold(Content)]).
@@ -158,6 +165,93 @@ unfold(Content) ->
         [Line, Rest] ->
             [Line|unfold(Rest)]
     end.
+
+format({calendar, Cal}) ->
+    fold(format(group, {<<"VCALENDAR">>, Cal})).
+
+format(date, {{Y, M, D}, {H, Mi, S}}) ->
+    bin(io_lib:format("~4..0B~2..0B~2..0BT~2..0B~2..0B~2..0BZ", [Y, M, D, H, Mi, S]));
+
+format(day, 1) -> <<"MO">>;
+format(day, 2) -> <<"TU">>;
+format(day, 3) -> <<"WE">>;
+format(day, 4) -> <<"TH">>;
+format(day, 5) -> <<"FR">>;
+format(day, 6) -> <<"SA">>;
+format(day, 7) -> <<"SU">>;
+
+format(wday, {any, Day}) ->
+    format(day, Day);
+format(wday, {Rel, Day}) ->
+    <<(bin(Rel))/binary, (format(day, Day))/binary>>;
+
+format(group, {G, Group}) ->
+    <<(format(Group, <<"BEGIN:", G/binary, ?CRLF>>))/binary, "END:", G/binary, ?CRLF>>;
+format(list, List) ->
+    bin(join(List, ","));
+format(params, Params) ->
+    << <<";", K/binary, "=", V/binary>> || [K, V] <- Params >>;
+
+format(recur, RRule) ->
+    bin(join([format(recur, T, RRule) || T <- record_info(fields, rrule)], ";", undefined));
+
+format([#rrule{params=Params} = RRule|Props], Acc) ->
+    format([{<<"RRULE">>, Params, format(recur, RRule)}|Props], Acc);
+format([#exdate{params=Params, dates=Dates}|Props], Acc) ->
+    format([{<<"EXDATE">>, Params, format(list, [format(date, D) || D <- Dates])}|Props], Acc);
+format([{Name, Params, Value}|Props], Acc) ->
+    format(Props, <<Acc/binary, Name/binary, (format(params, Params))/binary, ":", Value/binary, ?CRLF>>);
+format([{Name, Group}|Props], Acc) ->
+    format(Props, <<Acc/binary, (format(group, {Name, Group}))/binary>>);
+format(_, Acc) ->
+    Acc.
+
+format(recur, freq, #rrule{freq=Freq}) when Freq =/= undefined ->
+    <<"FREQ=", (case Freq of
+                    seconds -> <<"SECONDLY">>;
+                    minutes -> <<"MINUTELY">>;
+                    hours   -> <<"HOURLY">>;
+                    days    -> <<"DAILY">>;
+                    weeks   -> <<"WEEKLY">>;
+                    months  -> <<"MONTHLY">>;
+                    years   -> <<"YEARLY">>
+                end)/binary>>;
+
+format(recur, until, #rrule{until=End}) when End =/= undefined ->
+    <<"UNTIL=", (format(date, End))/binary>>;
+format(recur, count, #rrule{count=Num}) when Num =/= undefined ->
+    <<"COUNT=", (bin(Num))/binary>>;
+format(recur, interval, #rrule{interval=Num}) when Num =/= undefined, Num =/= 1 ->
+    <<"INTERVAL=", (bin(Num))/binary>>;
+
+format(recur, bysecond, #rrule{bysecond=[_] = L}) ->
+    <<"BYSECOND=", (format(list, [bin(I) || I <- L]))/binary>>;
+format(recur, byminute, #rrule{byminute=[_] = L}) ->
+    <<"BYMINUTE=", (format(list, [bin(I) || I <- L]))/binary>>;
+format(recur, byhour, #rrule{byhour=[_] = L}) ->
+    <<"BYHOUR=", (format(list, [bin(I) || I <- L]))/binary>>;
+format(recur, byday, #rrule{byday=[_] = L}) ->
+    <<"BYDAY=", (format(list, [format(wday, I) || I <- L]))/binary>>;
+format(recur, bymonthday, #rrule{bymonthday=[_] = L}) ->
+    <<"BYMONTHDAY=", (format(list, [bin(I) || I <- L]))/binary>>;
+format(recur, bymonth, #rrule{bymonth=[_] = L}) ->
+    <<"BYMONTH=", (format(list, [bin(I) || I <- L]))/binary>>;
+format(recur, wkst, #rrule{wkst=Day}) when Day =/= undefined, Day =/= 1 ->
+    <<"WKST=", (format(day, Day))/binary>>;
+format(recur, _, #rrule{}) ->
+    undefined.
+
+fold(Content) ->
+    fold(Content, 0, <<>>).
+
+fold(Content, N, Acc) when N >= 75 ->
+    fold(Content, 0, <<Acc/binary, ?CRLF, " ">>);
+fold(<<?CRLF, Rest/binary>>, _, Acc) ->
+    fold(Rest, 0, <<Acc/binary, ?CRLF>>);
+fold(<<C, Rest/binary>>, N, Acc) ->
+    fold(Rest, N + 1, <<Acc/binary, C>>);
+fold(<<>>, _, Acc) ->
+    Acc.
 
 %% Recurrence handling
 

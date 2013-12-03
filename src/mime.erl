@@ -2,7 +2,8 @@
 
 %% Basic MIME parsing (RFC 2822)
 
--export([parse/1,
+-export([fold/3,
+         parse/1,
          parse/3,
          format/1,
          format/2]).
@@ -19,7 +20,9 @@
          encode/2]).
 
 -export([skip_spaces/1,
-         wrap_lines/3,
+         wrap/2,
+         wrap/3,
+         wrap/4,
          split_headers/1,
          split_parts/1]).
 
@@ -57,14 +60,21 @@ skip_spaces(<<C, Rest/binary>>) when C >= 9, C =< 13; C =:= 32 ->
 skip_spaces(Binary) ->
     Binary.
 
-wrap_lines(Data, Every, Break) ->
-    wrap_lines(Data, Every, Break, <<>>).
 
-wrap_lines(Data, Every, Break, Acc) when size(Data) > Every ->
+wrap(Data, Every) ->
+    wrap(Data, Every, <<?CRLF>>).
+
+wrap(Data, Every, Break) ->
+    wrap(Data, Every, Break, Break).
+
+wrap(Data, Every, Break, Final) ->
+    wrap(Data, Every, Break, Final, <<>>).
+
+wrap(Data, Every, Break, Final, Acc) when size(Data) > Every ->
     <<Buf:Every/binary, Rest/binary>> = Data,
-    wrap_lines(Rest, Every, Break, <<Acc/binary, Buf/binary, Break/binary>>);
-wrap_lines(Data, _, Break, Acc) ->
-    <<Acc/binary, Data/binary, Break/binary>>.
+    wrap(Rest, Every, Break, Final, <<Acc/binary, Buf/binary, Break/binary>>);
+wrap(Data, _, _, Final, Acc) ->
+    <<Acc/binary, Data/binary, Final/binary>>.
 
 boundary(Headers) ->
     boundary(Headers, error).
@@ -147,7 +157,7 @@ encode({Headers, Body}) ->
     encode(content_transfer_encoding(Headers), Body).
 
 encode("base64", Body) ->
-    wrap_lines(base64:encode(Body), 76, <<?CRLF>>);
+    wrap(base64:encode(Body), 76);
 encode("quoted-printable", Body) ->
     encode("quoted-printable", Body, <<>>, 0);
 encode(_, Body) ->
@@ -212,6 +222,17 @@ clean_parts([], Preamble, undefined, Boundary, Acc) ->
     {Preamble, lists:reverse(Acc), <<>>, Boundary};
 clean_parts([Part|Parts], Preamble, Epilogue, Boundary, [Last|Acc]) ->
     clean_parts(Parts, Preamble, Epilogue, Boundary, [<<Last/binary, "--", Boundary/binary, Part/binary>>|Acc]).
+
+fold(Fun, Acc, Message) ->
+    {Headers, Body} = split_headers(Message),
+    case split_parts({Headers, Body}) of
+        {_, Parts, _, _} = Multi ->
+            lists:foldl(fun (Part, A) ->
+                                fold(Fun, A, Part)
+                        end, Fun(content_type(Headers), {Headers, Multi}, Acc), Parts);
+        <<_/binary>> ->
+            Fun(content_type(Headers), {Headers, Body}, Acc)
+    end.
 
 parse(Message) ->
     {Headers, Body} = split_headers(Message),
