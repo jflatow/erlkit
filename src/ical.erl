@@ -45,10 +45,6 @@
 -record(tzdate, {date, tz}).
 
 -define(CRLF, "\r\n").
--define(IS_WHITESPACE(X), (X =:= $\s orelse
-                           X =:= $\t orelse
-                           X =:= $\r orelse
-                           X =:= $\n)).
 -define(IS_WKDAY(X), (X =:= <<"MO">> orelse
                       X =:= <<"TU">> orelse
                       X =:= <<"WE">> orelse
@@ -66,7 +62,7 @@ utc(#tzdate{date=D, tz=undefined}, _Params) -> %% XXX: if tz in params, use inst
     calendar:local_time_to_universal_time_dst(D).
 
 parse(Content) ->
-    parse(calendar, [parse(prop, Line) || Line <- unfold(Content)]).
+    parse(calendar, [parse(prop, Line) || Line <- unfold(Content), size(Line) > 0]).
 
 parse(calendar, [{<<"BEGIN">>, [], <<"VCALENDAR">> = G}|Props]) ->
     {{G, Cal}, []} = parse(group, Props, {G, []}),
@@ -179,7 +175,7 @@ unfold(<<>>) ->
     [];
 unfold(Content) ->
     case binary:split(Content, <<?CRLF>>) of
-        [Line, <<Space, Rest/binary>>] when ?IS_WHITESPACE(Space) ->
+        [Line, <<Space, Rest/binary>>] when Space =:= $\s; Space =:= $\t ->
             [L|R] = unfold(Rest),
             [<<Line/binary, L/binary>>|R];
         [Line, Rest] ->
