@@ -22,6 +22,7 @@
          finite/1]).
 
 -import(util, [bin/1,
+               flt/1,
                int/1,
                join/2,
                join/3]).
@@ -41,6 +42,7 @@
                 params}).
 
 -record(exdate, {dates, params}).
+-record(tzdate, {date, tz}).
 
 -define(CRLF, "\r\n").
 -define(IS_WHITESPACE(X), (X =:= $\s orelse
@@ -54,6 +56,14 @@
                       X =:= <<"FR">> orelse
                       X =:= <<"SA">> orelse
                       X =:= <<"SU">>)).
+
+utc(Date) ->
+    utc(Date, []).
+
+utc(#tzdate{date=D, tz=utc}, _) ->
+    D;
+utc(#tzdate{date=D, tz=undefined}, _Params) -> %% XXX: if tz in params, use instead of local
+    calendar:local_time_to_universal_time_dst(D).
 
 parse(Content) ->
     parse(calendar, [parse(prop, Line) || Line <- unfold(Content)]).
@@ -75,6 +85,16 @@ parse(prop, {<<"RRULE">>, Params, Recur}) ->
 parse(prop, {<<"EXDATE">>, Params, Value}) ->
     #exdate{params=Params,
             dates=lists:usort([parse(date, D) || D <- parse(list, Value)])};
+
+parse(prop, {<<"DTSTART">>, Params, Value}) ->
+    {dtstart, Params, parse(date, Value)};
+parse(prop, {<<"DTEND">>, Params, Value}) ->
+    {dtend, Params, parse(date, Value)};
+
+parse(prop, {<<"GEO">>, [], Value}) ->
+    [Lat, Lng] = binary:split(Value, <<";">>),
+    {flt(Lat), flt(Lng)};
+
 parse(prop, Property) ->
     Property;
 
@@ -83,11 +103,11 @@ parse(list, List) ->
 
 %% NB: only handles UTC times properly
 parse(date, <<Y:4/binary, M:2/binary, D:2/binary, "T", H:2/binary, Mi:2/binary, S:2/binary, "Z">>) ->
-    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}};
+    #tzdate{date={{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}}, tz=utc};
 parse(date, <<Y:4/binary, M:2/binary, D:2/binary, "T", H:2/binary, Mi:2/binary, S:2/binary>>) ->
-    {{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}}; %% XXX: what is local time zone?
+    #tzdate{date={{int(Y), int(M), int(D)}, {int(H), int(Mi), int(S)}}};
 parse(date, <<Y:4/binary, M:2/binary, D:2/binary>>) ->
-    {{int(Y), int(M), int(D)}, {0, 0, 0}};
+    #tzdate{date={{int(Y), int(M), int(D)}, {0, 0, 0}}};
 
 parse(day, <<"MO">>) -> 1;
 parse(day, <<"TU">>) -> 2;
@@ -169,8 +189,10 @@ unfold(Content) ->
 format({calendar, Cal}) ->
     fold(format(group, {<<"VCALENDAR">>, Cal})).
 
-format(date, {{Y, M, D}, {H, Mi, S}}) ->
+format(date, #tzdate{date={{Y, M, D}, {H, Mi, S}}, tz=utc}) ->
     bin(io_lib:format("~4..0B~2..0B~2..0BT~2..0B~2..0B~2..0BZ", [Y, M, D, H, Mi, S]));
+format(date, #tzdate{date={{Y, M, D}, {H, Mi, S}}}) ->
+    bin(io_lib:format("~4..0B~2..0B~2..0BT~2..0B~2..0B~2..0B", [Y, M, D, H, Mi, S]));
 
 format(day, 1) -> <<"MO">>;
 format(day, 2) -> <<"TU">>;
@@ -199,6 +221,15 @@ format([#rrule{params=Params} = RRule|Props], Acc) ->
     format([{<<"RRULE">>, Params, format(recur, RRule)}|Props], Acc);
 format([#exdate{params=Params, dates=Dates}|Props], Acc) ->
     format([{<<"EXDATE">>, Params, format(list, [format(date, D) || D <- Dates])}|Props], Acc);
+
+format([{dtstart, Params, Date}|Props], Acc) ->
+    format([{<<"DTSTART">>, Params, format(date, Date)}|Props], Acc);
+format([{dtend, Params, Date}|Props], Acc) ->
+    format([{<<"DTEND">>, Params, format(date, Date)}|Props], Acc);
+
+format([{geo, Params, {Lat, Lng}}|Props], Acc) ->
+    format([{<<"GEO">>, Params, <<(bin(Lat))/binary, ";", (bin(Lng))/binary>>}|Props], Acc);
+
 format([{Name, Params, Value}|Props], Acc) ->
     format(Props, <<Acc/binary, Name/binary, (format(params, Params))/binary, ":", Value/binary, ?CRLF>>);
 format([{Name, Group}|Props], Acc) ->
@@ -300,11 +331,13 @@ final(First, Rules, {_, Max} = Range) ->
             undefined
     end.
 
+recur(#tzdate{} = First, Rules, Range) ->
+    recur(utc(First), Rules, Range);
 recur(First, Rules, Range) when is_list(Rules) ->
     lists:foldl(fun (#rrule{} = Rule, Acc) ->
                         lists:umerge(recur(First, Rule, Range), Acc);
                     (#exdate{dates=Dates}, Acc) ->
-                        ordsets:subtract(Acc, Dates)
+                        ordsets:subtract(Acc, [D || #tzdate{date=D} <- Dates])
                 end, [], Rules);
 
 recur(First, #rrule{count=N} = RRule, Range) when is_integer(N) ->
@@ -312,9 +345,9 @@ recur(First, #rrule{count=N} = RRule, Range) when is_integer(N) ->
 recur(First, #rrule{until=undefined} = RRule, {Min, _} = Range) ->
     recur(period(max(First, Min), RRule), First, RRule, Range);
 recur(First, #rrule{until=D} = RRule, {Min, undefined}) ->
-    recur(period(max(First, Min), RRule), First, RRule, {Min, D});
+    recur(period(max(First, Min), RRule), First, RRule, {Min, utc(D)});
 recur(First, #rrule{until=D} = RRule, {Min, Max}) ->
-    recur(period(max(First, Min), RRule), First, RRule, {Min, min(D, Max)}).
+    recur(period(max(First, Min), RRule), First, RRule, {Min, min(utc(D), Max)}).
 
 recur(Period, First, RRule, {Min, Max}) when ((Min =:= undefined orelse First >= Min) andalso
                                               (Max =:= undefined orelse First =< Max)) ->
