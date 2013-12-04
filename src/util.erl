@@ -1,10 +1,13 @@
 -module(util).
 
--export([mod/2,
+-export([atom/1,
+         atom/2,
+         list/1,
          bin/1,
          flt/1,
          int/1,
          num/1,
+         mod/2,
          hex/1,
          hexdigit/1,
          unhexdigit/1,
@@ -26,6 +29,53 @@
                      (C >= $0 andalso C =< $9) orelse
                      (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
 
+atom(Any) ->
+    atom(Any, false).
+
+atom(Atom, _) when is_atom(Atom) ->
+    Atom;
+atom(Else, true) ->
+    list_to_existing_atom(list(Else));
+atom(Else, false) ->
+    list_to_atom(list(Else)).
+
+list(List) when is_list(List) ->
+    List;
+list(Atom) when is_atom(Atom) ->
+    atom_to_list(Atom);
+list(Bin) when is_binary(Bin) ->
+    binary_to_list(Bin);
+list(Flt) when is_float(Flt) ->
+    float_to_list(Flt);
+list(Int) when is_integer(Int) ->
+    integer_to_list(Int).
+
+bin(Bin) when is_binary(Bin) ->
+    Bin;
+bin(List) when is_list(List) ->
+    iolist_to_binary(List);
+bin(Else) ->
+    bin(list(Else)).
+
+flt(Flt) when is_float(Flt) ->
+    Flt;
+flt(List) when is_list(List) ->
+    list_to_float(List);
+flt(Else) ->
+    flt(list(Else)).
+
+int(Int) when is_integer(Int) ->
+    Int;
+int(List) when is_list(List) ->
+    list_to_integer(List);
+int(Else) ->
+    int(list(Else)).
+
+num(Num) when is_number(Num) ->
+    Num;
+num(Any) ->
+    try flt(Any) catch error:badarg -> int(Any) end.
+
 mod(X, Y) ->
     case X rem Y of
         R when R < 0 ->
@@ -33,40 +83,6 @@ mod(X, Y) ->
         R ->
             R
     end.
-
-bin(Bin) when is_binary(Bin) ->
-    Bin;
-bin(Flt) when is_float(Flt) ->
-    bin(float_to_list(Flt));
-bin(Int) when is_integer(Int) ->
-    bin(integer_to_list(Int));
-bin(Atom) when is_atom(Atom) ->
-    bin(atom_to_list(Atom));
-bin(List) when is_list(List) ->
-    iolist_to_binary(List).
-
-flt(Flt) when is_float(Flt) ->
-    Flt;
-flt(Bin) when is_binary(Bin) ->
-    flt(binary_to_list(Bin));
-flt(Atom) when is_atom(Atom) ->
-    flt(atom_to_list(Atom));
-flt(List) when is_list(List) ->
-    list_to_float(List).
-
-int(Int) when is_integer(Int) ->
-    Int;
-int(Bin) when is_binary(Bin) ->
-    int(binary_to_list(Bin));
-int(Atom) when is_atom(Atom) ->
-    int(atom_to_list(Atom));
-int(List) when is_list(List) ->
-    list_to_integer(List).
-
-num(Num) when is_number(Num) ->
-    Num;
-num(Any) ->
-    try flt(Any) catch error:badarg -> int(Any) end.
 
 hex(List) when is_list(List) ->
     hex(list_to_binary(List));

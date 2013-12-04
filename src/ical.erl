@@ -21,11 +21,14 @@
          filter/3,
          finite/1]).
 
--import(util, [bin/1,
+-import(util, [atom/1,
+               bin/1,
                flt/1,
                int/1,
                join/2,
-               join/3]).
+               join/3,
+               lower/1,
+               upper/1]).
 
 %% NB: BYYEARDAY, BYWEEKNO, BYSETPOS not yet supported
 -record(rrule, {freq,
@@ -62,11 +65,7 @@ utc(#tzdate{date=D, tz=undefined}, _Params) -> %% XXX: if tz in params, use inst
     calendar:local_time_to_universal_time_dst(D).
 
 parse(Content) ->
-    parse(calendar, [parse(prop, Line) || Line <- unfold(Content), size(Line) > 0]).
-
-parse(calendar, [{<<"BEGIN">>, [], <<"VCALENDAR">> = G}|Props]) ->
-    {{G, Cal}, []} = parse(group, Props, {G, []}),
-    {calendar, Cal};
+    parse(group, [parse(prop, Line) || Line <- unfold(Content), size(Line) > 0], nil).
 
 parse(prop, Line) when is_binary(Line) ->
     [NameParams, Value] = binary:split(Line, <<":">>),
@@ -82,14 +81,32 @@ parse(prop, {<<"EXDATE">>, Params, Value}) ->
     #exdate{params=Params,
             dates=lists:usort([parse(date, D) || D <- parse(list, Value)])};
 
+parse(prop, {<<"CREATED">>, Params, Value}) ->
+    {created, Params, parse(date, Value)};
+parse(prop, {<<"DTSTAMP">>, Params, Value}) ->
+    {dtstamp, Params, parse(date, Value)};
 parse(prop, {<<"DTSTART">>, Params, Value}) ->
     {dtstart, Params, parse(date, Value)};
 parse(prop, {<<"DTEND">>, Params, Value}) ->
     {dtend, Params, parse(date, Value)};
 
-parse(prop, {<<"GEO">>, [], Value}) ->
+parse(prop, {<<"TZOFFSETFROM">>, Params, Value}) ->
+    {tzoffsetfrom, Params, parse(tzo, Value)};
+parse(prop, {<<"TZOFFSETTO">>, Params, Value}) ->
+    {tzoffsetto, Params, parse(tzo, Value)};
+
+parse(prop, {<<"GEO">>, Params, Value}) ->
     [Lat, Lng] = binary:split(Value, <<";">>),
-    {flt(Lat), flt(Lng)};
+    {geo, Params, {flt(Lat), flt(Lng)}};
+
+parse(prop, {<<"SEQUENCE">>, Params, Value}) ->
+    {sequence, Params, int(Value)};
+
+parse(prop, {<<"PRIORITY">>, Params, Value}) ->
+    {priority, Params, int(Value)};
+
+parse(prop, {Name, Params, Value}) when is_binary(Name) ->
+    {atom(lower(Name)), Params, Value};
 
 parse(prop, Property) ->
     Property;
@@ -120,12 +137,24 @@ parse(wday, <<O:2/binary, Day/binary>>) when ?IS_WKDAY(Day) ->
 parse(wday, <<O:1/binary, Day/binary>>) when ?IS_WKDAY(Day) ->
     {int(<<O/binary>>), parse(day, Day)};
 parse(wday, Day) when ?IS_WKDAY(Day) ->
-    {any, parse(day, Day)}.
+    {any, parse(day, Day)};
 
-parse(group, [{<<"BEGIN">>, [], G}|Props], {P, V}) ->
-    {Group, Rest} = parse(group, Props, {G, []}),
+parse(tzo, <<"+", H:2/binary, Mi:2/binary>>) ->
+    [{int(H), hours}, {int(Mi), minutes}];
+parse(tzo, <<"+", H:2/binary, Mi:2/binary, S:2/binary>>) ->
+    [{int(H), hours}, {int(Mi), minutes}, {int(S), seconds}];
+parse(tzo, <<"-", H:2/binary, Mi:2/binary>>) ->
+    [{-int(H), hours}, {-int(Mi), minutes}];
+parse(tzo, <<"-", H:2/binary, Mi:2/binary, S:2/binary>>) ->
+    [{-int(H), hours}, {-int(Mi), minutes}, {-int(S), seconds}].
+
+parse(group, [{'begin', [], G}|Props], nil) ->
+    {Group, []} = parse(group, Props, {atom(lower(G)), []}),
+    Group;
+parse(group, [{'begin', [], G}|Props], {P, V}) ->
+    {Group, Rest} = parse(group, Props, {atom(lower(G)), []}),
     parse(group, Rest, {P, [Group|V]});
-parse(group, [{<<"END">>, [], G}|Props], {G, V}) ->
+parse(group, [{'end', [], _}|Props], {G, V}) ->
     {{G, lists:reverse(V)}, Props};
 parse(group, [Prop|Rest], {G, V}) ->
     parse(group, Rest, {G, [Prop|V]});
@@ -182,8 +211,8 @@ unfold(Content) ->
             [Line|unfold(Rest)]
     end.
 
-format({calendar, Cal}) ->
-    fold(format(group, {<<"VCALENDAR">>, Cal})).
+format(Calendar) ->
+    fold(format(group, Calendar)).
 
 format(date, #tzdate{date={{Y, M, D}, {H, Mi, S}}, tz=utc}) ->
     bin(io_lib:format("~4..0B~2..0B~2..0BT~2..0B~2..0B~2..0BZ", [Y, M, D, H, Mi, S]));
@@ -203,6 +232,17 @@ format(wday, {any, Day}) ->
 format(wday, {Rel, Day}) ->
     <<(bin(Rel))/binary, (format(day, Day))/binary>>;
 
+format(tzo, [{H, hours}, {Mi, minutes}]) when H >= 0, Mi >= 0 ->
+    bin(io_lib:format("+~2..0B~2..0B", [H, Mi]));
+format(tzo, [{H, hours}, {Mi, minutes}, {S, seconds}]) when H >= 0, Mi >= 0, S >= 0 ->
+    bin(io_lib:format("+~2..0B~2..0B~2..0B", [H, Mi, S]));
+format(tzo, [{H, hours}, {Mi, minutes}]) when H =< 0, Mi =< 0 ->
+    bin(io_lib:format("-~2..0B~2..0B", [abs(H), abs(Mi)]));
+format(tzo, [{H, hours}, {Mi, minutes}, {S, seconds}]) when H =< 0, Mi =< 0, S =< 0 ->
+    bin(io_lib:format("-~2..0B~2..0B~2..0B", [abs(H), abs(Mi), abs(S)]));
+
+format(group, {G, Group}) when is_atom(G) ->
+    format(group, {upper(bin(G)), Group});
 format(group, {G, Group}) ->
     <<(format(Group, <<"BEGIN:", G/binary, ?CRLF>>))/binary, "END:", G/binary, ?CRLF>>;
 format(list, List) ->
@@ -218,13 +258,33 @@ format([#rrule{params=Params} = RRule|Props], Acc) ->
 format([#exdate{params=Params, dates=Dates}|Props], Acc) ->
     format([{<<"EXDATE">>, Params, format(list, [format(date, D) || D <- Dates])}|Props], Acc);
 
+format([{created, Params, Date}|Props], Acc) ->
+    format([{<<"CREATED">>, Params, format(date, Date)}|Props], Acc);
+format([{dtstamp, Params, Date}|Props], Acc) ->
+    format([{<<"DTSTAMP">>, Params, format(date, Date)}|Props], Acc);
 format([{dtstart, Params, Date}|Props], Acc) ->
     format([{<<"DTSTART">>, Params, format(date, Date)}|Props], Acc);
 format([{dtend, Params, Date}|Props], Acc) ->
     format([{<<"DTEND">>, Params, format(date, Date)}|Props], Acc);
 
+format([{tzoffsetfrom, Params, TZO}|Props], Acc) ->
+    format([{<<"TZOFFSETFROM">>, Params, format(tzo, TZO)}|Props], Acc);
+format([{tzoffsetto, Params, TZO}|Props], Acc) ->
+    format([{<<"TZOFFSETTO">>, Params, format(tzo, TZO)}|Props], Acc);
+
 format([{geo, Params, {Lat, Lng}}|Props], Acc) ->
     format([{<<"GEO">>, Params, <<(bin(Lat))/binary, ";", (bin(Lng))/binary>>}|Props], Acc);
+
+format([{sequence, Params, Seq}|Props], Acc) ->
+    format([{<<"SEQUENCE">>, Params, bin(Seq)}|Props], Acc);
+
+format([{priority, Params, N}|Props], Acc) ->
+    format([{<<"PRIORITY">>, Params, bin(N)}|Props], Acc);
+
+format([{Atom, Params, Value}|Props], Acc) when is_atom(Atom) ->
+    format([{upper(bin(Atom)), Params, Value}|Props], Acc);
+format([{Atom, Group}|Props], Acc) when is_atom(Atom) ->
+    format([{upper(bin(Atom)), Group}|Props], Acc);
 
 format([{Name, Params, Value}|Props], Acc) ->
     format(Props, <<Acc/binary, Name/binary, (format(params, Params))/binary, ":", Value/binary, ?CRLF>>);
