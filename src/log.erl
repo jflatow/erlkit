@@ -7,6 +7,9 @@
          locus/1,
          write/2,
          write/3,
+         bendl/3,
+         bendl/4,
+         bendl/5,
          foldl/3,
          foldl/4,
          foldl/5,
@@ -57,11 +60,20 @@ write(Log, Entry, call) ->
 write(Log, Entry, cast) ->
     gen_server:cast(Log, {do, {write, Entry}}).
 
+bendl(Log, Fun, Acc) ->
+    bendl(Log, Fun, Acc, {undefined, undefined}).
+
+bendl(Log, Fun, Acc, Range) ->
+    bendl(Log, Fun, Acc, Range, []).
+
+bendl(Log, Fun, Acc, {I1, _} = Range, Opts) ->
+    foldl(Log, fun ({M, _} = T, {_, A}) -> {M, Fun(T, A)} end, {{I1, I1}, Acc}, Range, Opts).
+
 foldl(Log, Fun, Acc) ->
     foldl(Log, Fun, Acc, {undefined, undefined}).
 
-foldl(Log, Fun, Acc, {I1, I2}) ->
-    foldl(Log, Fun, Acc, {I1, I2}, []).
+foldl(Log, Fun, Acc, Range) ->
+    foldl(Log, Fun, Acc, Range, []).
 
 foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
     Mode = proplists:get_value(mode, Opts, safe),
