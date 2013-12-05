@@ -33,7 +33,7 @@ io(Filename) ->
              end
      end,
      fun ({mark, Mark}) ->
-             case file:write_file(Filename, term_to_binary(Mark)) of
+             case path:write(Filename, term_to_binary(Mark)) of
                  ok ->
                      ok;
                  Error ->

@@ -5,6 +5,8 @@
          diff/2,
          pass/1,
          pass/2,
+         unix/0,
+         unix/1,
          unow/0,
          datetime/1,
          seconds/1,
@@ -24,6 +26,7 @@
 -define(Minute, 60 * ?Second).
 -define(Hour, 60 * ?Minute).
 -define(Day, 24 * ?Hour).
+-define(UnixEpoch, 62167219200).
 
 ago(Elapsed) ->
     ago(unow(), Elapsed).
@@ -57,13 +60,21 @@ pass(Time, [H|Tail]) ->
 pass(Time, Elapse) ->
     datetime(seconds(Time) + seconds(Elapse)).
 
+unix() ->
+    unix(unow()).
+
+unix(Time) ->
+    seconds(Time) - ?UnixEpoch.
+
 unow() ->
     calendar:universal_time().
 
 datetime(Seconds) when is_integer(Seconds) ->
     calendar:gregorian_seconds_to_datetime(Seconds);
 datetime(Seconds) when is_float(Seconds) ->
-    pass(datetime(trunc(Seconds)), Seconds - trunc(Seconds));
+    datetime(trunc(Seconds));
+datetime({unix, Seconds}) ->
+    datetime(Seconds + ?UnixEpoch);
 datetime({{D, T}, O}) when is_list(O) ->
     pass({D, T}, O);
 datetime({_, _, _} = Now) ->
