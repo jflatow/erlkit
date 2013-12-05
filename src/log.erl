@@ -16,7 +16,8 @@
          range/2,
          range/3,
          since/2,
-         since/3]).
+         since/3,
+         marker/3]).
 
 -behavior(gen_server).
 -export([init/1,
@@ -104,6 +105,12 @@ since(Log, Id) ->
 
 since(Log, Id, Opts) ->
     range(Log, {Id, undefined}, Opts).
+
+marker(Log, Fun, IO) ->
+    marker:new(fun ({{mark, Mark}, Data}) ->
+                       {{_, Next}, D} = log:bendl(Log, Fun, Data, {Mark, undefined}),
+                       {{mark, Next}, D}
+               end, marker:io(IO)).
 
 %% gen_server
 
