@@ -4,6 +4,7 @@
 
 -export([fold/3,
          parse/1,
+         parse/2,
          parse/3,
          format/1,
          format/2]).
@@ -27,6 +28,7 @@
          split_parts/1]).
 
 -import(util, [bin/1,
+               int/1,
                hexdigit/1,
                unhexdigit/1]).
 
@@ -36,6 +38,7 @@
 -define(LF, $\n).
 -define(CRLF, "\r\n").
 -define(Q, $\").
+-define(IS_DIGIT(C), (C >= $0 andalso C =< $9)).
 -define(IS_PRINTABLE(C), (C >= ?SP andalso C =< $~ andalso C =/= $=)).
 
 normalize(Name) when is_atom(Name) ->
@@ -54,6 +57,56 @@ read_quoted(<<$\\, C, Rest/binary>>, Acc) ->
     read_quoted(Rest, <<Acc/binary, C>>);
 read_quoted(<<C, Rest/binary>>, Acc) ->
     read_quoted(Rest, <<Acc/binary, C>>).
+
+read(datetime, Timestamp) ->
+    {_DoW, R0} = read(dow, skip_spaces(Timestamp)),
+    {Date, R1} = read(date, skip_spaces(R0)),
+    {Time, R2} = read(time, skip_spaces(R1)),
+    {Offs, R3} = read(offs, skip_spaces(R2)),
+    {{{Date, Time}, Offs}, R3};
+
+read(dow, <<DoW:3/binary, ",", Rest/binary>>) ->
+    {DoW, Rest};
+read(dow, Timestamp) ->
+    {<<>>, Timestamp};
+
+read(date, Timestamp) ->
+    {D, R0} = read(day, skip_spaces(Timestamp)),
+    {M, R1} = read(month, skip_spaces(R0)),
+    {Y, R2} = read(year, skip_spaces(R1)),
+    {{Y, M, D}, R2};
+
+read(day, <<A, B, Rest/binary>>) when ?IS_DIGIT(A), ?IS_DIGIT(B) ->
+    {int([A, B]), Rest};
+read(day, <<A, Rest/binary>>) ->
+    {int([A]), Rest};
+
+read(month, <<M:3/binary, Rest/binary>>) ->
+    {case M of
+         <<"Jan">> -> 1;
+         <<"Feb">> -> 2;
+         <<"Mar">> -> 3;
+         <<"Apr">> -> 4;
+         <<"May">> -> 5;
+         <<"Jun">> -> 6;
+         <<"Jul">> -> 7;
+         <<"Aug">> -> 8;
+         <<"Sep">> -> 9;
+         <<"Oct">> -> 10;
+         <<"Nov">> -> 11;
+         <<"Dec">> -> 12
+     end, Rest};
+
+read(year, <<Y:4/binary, Rest/binary>>) ->
+    {int(Y), Rest};
+
+read(time, <<H:2/binary, ":", Mi:2/binary, ":", S:2/binary, Rest/binary>>) ->
+    {{int(H), int(Mi), int(S)}, Rest};
+
+read(offs, <<"+", H:2/binary, Mi:2/binary, Rest/binary>>) ->
+    {[{-int(H), hours}, {-int(Mi), minutes}], Rest};
+read(offs, <<"-", H:2/binary, Mi:2/binary, Rest/binary>>) ->
+    {[{int(H), hours}, {int(Mi), minutes}], Rest}.
 
 skip_spaces(<<C, Rest/binary>>) when C >= 9, C =< 13; C =:= 32 ->
     skip_spaces(Rest);
@@ -249,6 +302,9 @@ parse(Message) ->
              end
      end}.
 
+parse(datetime, Timestamp) ->
+    element(1, read(datetime, bin(Timestamp))).
+
 parse(header, Buffer, Line) ->
     case binary:split(<<Buffer/binary, Line/binary>>, <<":">>) of
         [Field, Value] ->
@@ -273,4 +329,34 @@ format(body, {Headers, {Parts, Boundary}}) ->
 format(body, {Headers, Parts}) when is_list(Parts) ->
     format(body, {Headers, {<<>>, Parts, <<>>, boundary(Headers)}});
 format(body, HB) ->
-    iolist_to_binary(encode(HB)).
+    iolist_to_binary(encode(HB));
+
+format(datetime, {{D, T}, O}) ->
+    <<(format(date, D))/binary, " ", (format(time, T))/binary, " ", (format(offs, O))/binary>>;
+format(datetime, {D, T}) ->
+    format(datetime, {{D, T}, [{0, hours}, {0, minutes}]});
+
+format(date, {Y, M, D}) ->
+    Mon = case M of
+              01 -> <<"Jan">>;
+              02 -> <<"Feb">>;
+              03 -> <<"Mar">>;
+              04 -> <<"Apr">>;
+              05 -> <<"May">>;
+              06 -> <<"Jun">>;
+              07 -> <<"Jul">>;
+              08 -> <<"Aug">>;
+              09 -> <<"Sep">>;
+              10 -> <<"Oct">>;
+              11 -> <<"Nov">>;
+              12 -> <<"Dec">>
+          end,
+    bin(io_lib:format("~2..0B ~s ~4..0B", [D, Mon, Y]));
+
+format(time, {H, Mi, S}) ->
+    bin(io_lib:format("~2..0B:~2..0B:~2..0B", [H, Mi, S]));
+
+format(offs, [{H, hours}, {Mi, minutes}]) when H >= 0, Mi >= 0 ->
+    bin(io_lib:format("-~2..0B~2..0B", [H, Mi]));
+format(offs, [{H, hours}, {Mi, minutes}]) when H =< 0, Mi =< 0 ->
+    bin(io_lib:format("+~2..0B~2..0B", [abs(H), abs(Mi)])).

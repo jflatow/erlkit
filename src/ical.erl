@@ -140,13 +140,13 @@ parse(wday, Day) when ?IS_WKDAY(Day) ->
     {any, parse(day, Day)};
 
 parse(tzo, <<"+", H:2/binary, Mi:2/binary>>) ->
-    [{int(H), hours}, {int(Mi), minutes}];
-parse(tzo, <<"+", H:2/binary, Mi:2/binary, S:2/binary>>) ->
-    [{int(H), hours}, {int(Mi), minutes}, {int(S), seconds}];
-parse(tzo, <<"-", H:2/binary, Mi:2/binary>>) ->
     [{-int(H), hours}, {-int(Mi), minutes}];
+parse(tzo, <<"+", H:2/binary, Mi:2/binary, S:2/binary>>) ->
+    [{-int(H), hours}, {-int(Mi), minutes}, {-int(S), seconds}];
+parse(tzo, <<"-", H:2/binary, Mi:2/binary>>) ->
+    [{int(H), hours}, {int(Mi), minutes}];
 parse(tzo, <<"-", H:2/binary, Mi:2/binary, S:2/binary>>) ->
-    [{-int(H), hours}, {-int(Mi), minutes}, {-int(S), seconds}].
+    [{int(H), hours}, {int(Mi), minutes}, {int(S), seconds}].
 
 parse(group, [{'begin', [], G}|Props], nil) ->
     {Group, []} = parse(group, Props, {atom(lower(G)), []}),
@@ -233,13 +233,13 @@ format(wday, {Rel, Day}) ->
     <<(bin(Rel))/binary, (format(day, Day))/binary>>;
 
 format(tzo, [{H, hours}, {Mi, minutes}]) when H >= 0, Mi >= 0 ->
-    bin(io_lib:format("+~2..0B~2..0B", [H, Mi]));
+    bin(io_lib:format("-~2..0B~2..0B", [H, Mi]));
 format(tzo, [{H, hours}, {Mi, minutes}, {S, seconds}]) when H >= 0, Mi >= 0, S >= 0 ->
-    bin(io_lib:format("+~2..0B~2..0B~2..0B", [H, Mi, S]));
+    bin(io_lib:format("-~2..0B~2..0B~2..0B", [H, Mi, S]));
 format(tzo, [{H, hours}, {Mi, minutes}]) when H =< 0, Mi =< 0 ->
-    bin(io_lib:format("-~2..0B~2..0B", [abs(H), abs(Mi)]));
+    bin(io_lib:format("+~2..0B~2..0B", [abs(H), abs(Mi)]));
 format(tzo, [{H, hours}, {Mi, minutes}, {S, seconds}]) when H =< 0, Mi =< 0, S =< 0 ->
-    bin(io_lib:format("-~2..0B~2..0B~2..0B", [abs(H), abs(Mi), abs(S)]));
+    bin(io_lib:format("+~2..0B~2..0B~2..0B", [abs(H), abs(Mi), abs(S)]));
 
 format(group, {G, Group}) when is_atom(G) ->
     format(group, {upper(bin(G)), Group});

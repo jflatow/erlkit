@@ -50,6 +50,10 @@ pass({{Y, M, D}, {H, Mi, S}}, {N, months}) ->
           0 -> 12;
           O -> O
       end, D}, {H, Mi, S}};
+pass(Time, []) ->
+    Time;
+pass(Time, [H|Tail]) ->
+    pass(pass(Time, H), Tail);
 pass(Time, Elapse) ->
     datetime(seconds(Time) + seconds(Elapse)).
 
@@ -60,7 +64,7 @@ datetime(Seconds) when is_integer(Seconds) ->
     calendar:gregorian_seconds_to_datetime(Seconds);
 datetime(Seconds) when is_float(Seconds) ->
     pass(datetime(trunc(Seconds)), Seconds - trunc(Seconds));
-datetime({D, T, O}) when is_tuple(D), is_tuple(T) ->
+datetime({{D, T}, O}) when is_list(O) ->
     pass({D, T}, O);
 datetime({_, _, _} = Now) ->
     calendar:now_to_universal_time(Now);
@@ -79,8 +83,6 @@ seconds({N, seconds}) ->
     N * ?Second;
 seconds(Seconds) when is_number(Seconds) ->
     Seconds;
-seconds({D, T, O}) ->
-    seconds(datetime({D, T, O}));
 seconds({D, {H, M, S}}) when is_float(S) ->
     seconds({D, {H, M, trunc(S)}}) + (S - trunc(S));
 seconds({_, _} = DateTime) ->
@@ -108,10 +110,11 @@ parse(<<Y:4/binary, "-", M:2/binary, "-", D:2/binary, _/binary>>) ->
 parse(_) ->
     undefined.
 
-parse(Timestamp, rfc3339) when is_list(Timestamp) ->
-    parse(list_to_binary(Timestamp), rfc3339);
+parse(Timestamp, rfc2822) ->
+    datetime(mime:parse(datetime, Timestamp));
+
 parse(Timestamp, rfc3339) ->
-    {Time, _} = read_rfc3339(Timestamp),
+    {Time, _} = read_rfc3339(util:bin(Timestamp)),
     datetime(Time).
 
 read_digits(<<C, Rest/binary>>, Acc) when C >= $0, C =< $9 ->
@@ -123,7 +126,7 @@ read_rfc3339(Timestamp) ->
     {Date, R0} = read_rfc3339(date, Timestamp),
     {Time, R1} = read_rfc3339(time, R0),
     {Offs, R2} = read_rfc3339(offs, R1),
-    {{Date, Time, calendar:time_to_seconds(Offs)}, R2}.
+    {{{Date, Time}, Offs}, R2}.
 
 read_rfc3339(date, <<Y:4/binary, "-", M:2/binary, "-", D:2/binary, Rest/binary>>) ->
     {{int(Y), int(M), int(D)}, Rest};
@@ -133,11 +136,11 @@ read_rfc3339(time, <<"T", H:2/binary, ":", M:2/binary, ":", S:2/binary, ".", R0/
 read_rfc3339(time, <<"T", H:2/binary, ":", M:2/binary, ":", S:2/binary, Rest/binary>>) ->
     {{int(H), int(M), int(S)}, Rest};
 read_rfc3339(offs, <<"Z", Rest/binary>>) ->
-    {{0, 0, 0}, Rest};
-read_rfc3339(offs, <<"+", H:2/binary, ":", M:2/binary, Rest/binary>>) ->
-    {{-int(H), -int(M), 0}, Rest};
-read_rfc3339(offs, <<"-", H:2/binary, ":", M:2/binary, Rest/binary>>) ->
-    {{int(H), int(M), 0}, Rest};
+    {[], Rest};
+read_rfc3339(offs, <<"+", H:2/binary, ":", Mi:2/binary, Rest/binary>>) ->
+    {[{-int(H), hours}, {-int(Mi), minutes}], Rest};
+read_rfc3339(offs, <<"-", H:2/binary, ":", Mi:2/binary, Rest/binary>>) ->
+    {[{int(H), hours}, {int(Mi), minutes}], Rest};
 read_rfc3339(_, Rest) ->
     {{0, 0, 0}, Rest}.
 
@@ -145,6 +148,9 @@ stamp({{Y, M, D}, {H, Mi, S}}) ->
     list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]));
 stamp(Time) ->
     stamp(datetime(Time)).
+
+stamp(Time, rfc2822) ->
+    mime:format(datetime, Time);
 
 stamp({{Y, M, D}, {H, Mi, S}}, rfc3339) ->
     list_to_binary(io_lib:format("~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ", [Y, M, D, H, Mi, S]));
