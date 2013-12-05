@@ -146,14 +146,16 @@ read_rfc3339(time, <<"T", H:2/binary, ":", M:2/binary, ":", S:2/binary, ".", R0/
     {{int(H), int(M), int(S) + int(Frac) / (math:pow(10, size(Frac)))}, R1};
 read_rfc3339(time, <<"T", H:2/binary, ":", M:2/binary, ":", S:2/binary, Rest/binary>>) ->
     {{int(H), int(M), int(S)}, Rest};
+read_rfc3339(time, Rest) ->
+    {{0, 0, 0}, Rest};
 read_rfc3339(offs, <<"Z", Rest/binary>>) ->
     {[], Rest};
 read_rfc3339(offs, <<"+", H:2/binary, ":", Mi:2/binary, Rest/binary>>) ->
     {[{-int(H), hours}, {-int(Mi), minutes}], Rest};
 read_rfc3339(offs, <<"-", H:2/binary, ":", Mi:2/binary, Rest/binary>>) ->
     {[{int(H), hours}, {int(Mi), minutes}], Rest};
-read_rfc3339(_, Rest) ->
-    {{0, 0, 0}, Rest}.
+read_rfc3339(offs, Rest) ->
+    {[{0, hours}, {0, minutes}], Rest}.
 
 stamp({{Y, M, D}, {H, Mi, S}}) ->
     list_to_binary(io_lib:format("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B", [Y, M, D, H, Mi, S]));
