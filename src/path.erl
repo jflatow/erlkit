@@ -160,8 +160,15 @@ rmrf(Path) ->
     case file:delete(Path) of
         ok ->
             ok;
+        {error, enoent} ->
+            ok;
         {error, eperm} ->
-            ok = foldl(Path, fun (P, ok) -> rmrf(P) end, ok),
+            ok = case file:list_dir(Path) of
+                     {ok, Paths} ->
+                         lists:foldl(fun (P, ok) ->
+                                             rmrf(filename:join(Path, P))
+                                     end, ok, Paths)
+                 end,
             file:del_dir(Path)
     end.
 

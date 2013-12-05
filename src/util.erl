@@ -14,6 +14,7 @@
          urlencode/1,
          quote_plus/1,
          unquote/1,
+         count/3,
          enum/3,
          join/2,
          join/3,
@@ -130,6 +131,13 @@ unquote(<<"%", Hi, Lo, Rest/binary>>, Acc) ->
     unquote(Rest, <<Acc/binary, (unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4))>>);
 unquote(<<C, Rest/binary>>, Acc) ->
     unquote(Rest, <<Acc/binary, C>>).
+
+count(Fun, Acc, N) when is_number(N) ->
+    count(Fun, Acc, {0, N});
+count(Fun, Acc, {I, N}) when I < N ->
+    count(Fun, Fun(I, Acc), {I + 1, N});
+count(_, Acc, _) ->
+    Acc.
 
 enum(Fun, Acc, List) ->
     element(2, lists:foldl(fun (I, {N, A}) ->
