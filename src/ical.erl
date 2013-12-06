@@ -70,7 +70,7 @@ parse(Content) ->
 parse(prop, Line) when is_binary(Line) ->
     [NameParams, Value] = binary:split(Line, <<":">>),
     [Name|Params] = binary:split(NameParams, <<";">>, [global]),
-    parse(prop, {Name, [binary:split(P, <<"=">>) || P <- Params], Value});
+    parse(prop, {Name, [list_to_tuple(binary:split(P, <<"=">>)) || P <- Params], Value});
 
 parse(prop, {<<"RRULE">>, Params, Recur}) ->
     parse(recur, binary:split(Recur, <<";">>, [global]),
@@ -248,7 +248,7 @@ format(group, {G, Group}) ->
 format(list, List) ->
     bin(join(List, ","));
 format(params, Params) ->
-    << <<";", K/binary, "=", V/binary>> || [K, V] <- Params >>;
+    << <<";", K/binary, "=", V/binary>> || {K, V} <- Params >>;
 
 format(recur, RRule) ->
     bin(join([format(recur, T, RRule) || T <- record_info(fields, rrule)], ";", undefined));
