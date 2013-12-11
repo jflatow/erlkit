@@ -763,3 +763,8 @@ rrule_example37_test() ->
                 {{1997,8,17},{9,0,0}},
                 {{1997,8,19},{9,0,0}},
                 {{1997,8,31},{9,0,0}}]).
+
+rrule_infinite_test() ->
+    Rule = ical:rrule([<<"RRULE:FREQ=DAILY;WKST=SU;UNTIL=20061116">>]),
+    Start = {{2006, 11, 15}, {0, 0, 0}},
+    ?assertMatch({{2006,11,16},{0,0,0}}, ical:final(Start, Rule)).

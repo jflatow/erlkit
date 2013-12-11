@@ -6,6 +6,8 @@
          format/1,
          format/2]).
 
+-export([utc/1]).
+
 %% ical specific folding (wrapping)
 -export([unfold/1,
          fold/1]).
@@ -62,7 +64,10 @@ utc(Date) ->
 utc(#tzdate{date=D, tz=utc}, _) ->
     D;
 utc(#tzdate{date=D, tz=undefined}, _Params) -> %% XXX: if tz in params, use instead of local
-    calendar:local_time_to_universal_time_dst(D).
+    case calendar:local_time_to_universal_time_dst(D) of
+        [U|_] ->
+            U
+    end.
 
 parse(Content) ->
     parse(group, [parse(prop, Line) || Line <- unfold(Content), size(Line) > 0], nil).
