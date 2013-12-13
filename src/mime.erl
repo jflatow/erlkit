@@ -276,12 +276,12 @@ clean_parts([], Preamble, undefined, Boundary, Acc) ->
 clean_parts([Part|Parts], Preamble, Epilogue, Boundary, [Last|Acc]) ->
     clean_parts(Parts, Preamble, Epilogue, Boundary, [<<Last/binary, "--", Boundary/binary, Part/binary>>|Acc]).
 
-fold(Fun, Acc, Message) ->
+fold(Message, Fun, Acc) ->
     {Headers, Body} = split_headers(Message),
     case split_parts({Headers, Body}) of
         {_, Parts, _, _} = Multi ->
             lists:foldl(fun (Part, A) ->
-                                fold(Fun, A, Part)
+                                fold(Part, Fun, A)
                         end, Fun(content_type(Headers), {Headers, Multi}, Acc), Parts);
         <<_/binary>> ->
             Fun(content_type(Headers), {Headers, Body}, Acc)
