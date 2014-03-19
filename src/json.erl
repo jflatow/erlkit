@@ -1,42 +1,6 @@
 %% @author Bob Ippolito <bob@mochimedia.com>
 %% @copyright 2007 Mochi Media, Inc.
 
-%% @doc Yet another JSON (RFC 4627) library for Erlang. mochijson2 works
-%%      with binaries as strings, arrays as lists (without an {array, _})
-%%      wrapper and it only knows how to decode UTF-8 (and ASCII).
-%%
-%%      JSON terms are decoded as follows (javascript -> erlang):
-%%      <ul>
-%%          <li>{"key": "value"} ->
-%%              {struct, [{&lt;&lt;"key">>, &lt;&lt;"value">>}]}</li>
-%%          <li>["array", 123, 12.34, true, false, null] ->
-%%              [&lt;&lt;"array">>, 123, 12.34, true, false, null]
-%%          </li>
-%%      </ul>
-%%      <ul>
-%%          <li>Strings in JSON decode to UTF-8 binaries in Erlang</li>
-%%          <li>Objects decode to {struct, PropList}</li>
-%%          <li>Numbers decode to integer or float</li>
-%%          <li>true, false, null decode to their respective terms.</li>
-%%      </ul>
-%%      The encoder will accept the same format that the decoder will produce,
-%%      but will also allow additional cases for leniency:
-%%      <ul>
-%%          <li>atoms other than true, false, null will be considered UTF-8
-%%              strings (even as a proplist key)
-%%          </li>
-%%          <li>{json, IoList} will insert IoList directly into the output
-%%              with no validation
-%%          </li>
-%%          <li>{array, Array} will be encoded as Array
-%%              (legacy mochijson style)
-%%          </li>
-%%          <li>A non-empty raw proplist will be encoded as an object as long
-%%              as the first pair does not have an atom key of json, struct,
-%%              or array
-%%          </li>
-%%      </ul>
-
 -module(json).
 -author('bob@mochimedia.com').
 -export([encoder/1, encode/1]).
@@ -67,11 +31,9 @@
 %% @type json_string() = atom | binary()
 %% @type json_number() = integer() | float()
 %% @type json_array() = [json_term()]
-%% @type json_object() = {struct, [{json_string(), json_term()}]}
-%% @type json_eep18_object() = {[{json_string(), json_term()}]}
+%% @type json_object() = #{json_string() => json_term()}
 %% @type json_iolist() = {json, iolist()}
-%% @type json_term() = json_string() | json_number() | json_array() |
-%%                     json_object() | json_eep18_object() | json_iolist()
+%% @type json_term() = json_string() | json_number() | json_array() | json_object() | json_iolist()
 
 -record(encoder, {handler=null,
                   utf8=false}).
@@ -101,11 +63,8 @@ decoder(Options) ->
     State = parse_decoder_options(Options, #decoder{}),
     fun (O) -> json_decode(O, State) end.
 
-%% @spec decode(iolist(), [{format, proplist | eep18 | struct}]) -> json_term()
+%% @spec decode(iolist(), list()) -> json_term()
 %% @doc Decode the given iolist to Erlang terms using the given object format
-%%      for decoding, where proplist returns JSON objects as [{binary(), json_term()}]
-%%      proplists, eep18 returns JSON objects as {[binary(), json_term()]}, and struct
-%%      returns them as-is.
 decode(S, Options) ->
     json_decode(S, parse_decoder_options(Options, #decoder{})).
 
@@ -126,10 +85,7 @@ parse_encoder_options([{utf8, Switch} | Rest], State) ->
 parse_decoder_options([], State) ->
     State;
 parse_decoder_options([{object_hook, Hook} | Rest], State) ->
-    parse_decoder_options(Rest, State#decoder{object_hook=Hook});
-parse_decoder_options([{format, Format} | Rest], State)
-  when Format =:= struct orelse Format =:= eep18 orelse Format =:= proplist ->
-    parse_decoder_options(Rest, State#decoder{object_hook=Format}).
+    parse_decoder_options(Rest, State#decoder{object_hook=Hook}).
 
 json_encode(true, _State) ->
     <<"true">>;
@@ -144,14 +100,10 @@ json_encode(F, _State) when is_float(F) ->
 json_encode(S, State) when is_binary(S); is_atom(S) ->
     json_encode_string(S, State);
 json_encode([{K, _}|_] = Props, State) when (is_binary(K) orelse is_atom(K)),
-                                            (K =/= struct andalso
-                                             K =/= array andalso
-                                             K =/= json) ->
+                                            (K =/= array andalso K =/= json) ->
     json_encode_proplist(Props, State);
-json_encode({struct, Props}, State) when is_list(Props) ->
-    json_encode_proplist(Props, State);
-json_encode({Props}, State) when is_list(Props) ->
-    json_encode_proplist(Props, State);
+json_encode(#{} = Map, State) ->
+    json_encode_proplist(maps:to_list(Map), State);
 json_encode({}, State) ->
     json_encode_proplist([], State);
 json_encode(Array, State) when is_list(Array) ->
@@ -340,12 +292,8 @@ decode1(B, S=#decoder{state=null}) ->
             decode_object(B, S1)
     end.
 
-make_object(V, #decoder{object_hook=N}) when N =:= null orelse N =:= struct ->
+make_object(V, #decoder{object_hook=N}) when N =:= null ->
     V;
-make_object({struct, P}, #decoder{object_hook=eep18}) ->
-    {P};
-make_object({struct, P}, #decoder{object_hook=proplist}) ->
-    P;
 make_object(V, #decoder{object_hook=Hook}) ->
     Hook(V).
 
@@ -355,8 +303,8 @@ decode_object(B, S) ->
 decode_object(B, S=#decoder{state=key}, Acc) ->
     case tokenize(B, S) of
         {end_object, S1} ->
-            V = make_object({struct, lists:reverse(Acc)}, S1),
-            {V, S1#decoder{state=null}};
+            O = make_object(maps:from_list(Acc), S1),
+            {O, S1#decoder{state=null}};
         {{const, K}, S1} ->
             {colon, S2} = tokenize(B, S1),
             {V, S3} = decode1(B, S2#decoder{state=null}),
@@ -365,8 +313,8 @@ decode_object(B, S=#decoder{state=key}, Acc) ->
 decode_object(B, S=#decoder{state=comma}, Acc) ->
     case tokenize(B, S) of
         {end_object, S1} ->
-            V = make_object({struct, lists:reverse(Acc)}, S1),
-            {V, S1#decoder{state=null}};
+            O = make_object(maps:from_list(Acc), S1),
+            {O, S1#decoder{state=null}};
         {comma, S1} ->
             decode_object(B, S1#decoder{state=key}, Acc)
     end.
@@ -588,54 +536,6 @@ tokenize(B, S=#decoder{offset=O}) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-
-%% testing constructs borrowed from the Yaws JSON implementation.
-
-%% Create an object from a list of Key/Value pairs.
-
-obj_new() ->
-    {struct, []}.
-
-is_obj({struct, Props}) ->
-    F = fun ({K, _}) when is_binary(K) -> true end,
-    lists:all(F, Props).
-
-obj_from_list(Props) ->
-    Obj = {struct, Props},
-    ?assert(is_obj(Obj)),
-    Obj.
-
-%% Test for equivalence of Erlang terms.
-%% Due to arbitrary order of construction, equivalent objects might
-%% compare unequal as erlang terms, so we need to carefully recurse
-%% through aggregates (tuples and objects).
-
-equiv({struct, Props1}, {struct, Props2}) ->
-    equiv_object(Props1, Props2);
-equiv(L1, L2) when is_list(L1), is_list(L2) ->
-    equiv_list(L1, L2);
-equiv(N1, N2) when is_number(N1), is_number(N2) -> N1 == N2;
-equiv(B1, B2) when is_binary(B1), is_binary(B2) -> B1 == B2;
-equiv(A, A) when A =:= true orelse A =:= false orelse A =:= null -> true.
-
-%% Object representation and traversal order is unknown.
-%% Use the sledgehammer and sort property lists.
-
-equiv_object(Props1, Props2) ->
-    L1 = lists:keysort(1, Props1),
-    L2 = lists:keysort(1, Props2),
-    Pairs = lists:zip(L1, L2),
-    true = lists:all(fun({{K1, V1}, {K2, V2}}) ->
-                             equiv(K1, K2) and equiv(V1, V2)
-                     end, Pairs).
-
-%% Recursively compare tuple elements for equivalence.
-
-equiv_list([], []) ->
-    true;
-equiv_list([V1 | L1], [V2 | L2]) ->
-    equiv(V1, V2) andalso equiv_list(L1, L2).
-
 decode_test() ->
     [1199344435545.0, 1] = decode(<<"[1199344435545.0,1]">>),
     <<16#F0,16#9D,16#9C,16#95>> = decode([34,"\\ud835","\\udf15",34]).
@@ -648,8 +548,8 @@ test_one([], _N) ->
     ok;
 test_one([{E, J} | Rest], N) ->
     %% io:format("[~p] ~p ~p~n", [N, E, J]),
-    true = equiv(E, decode(J)),
-    true = equiv(E, decode(encode(E))),
+    ?assertEqual(E, decode(J)),
+    ?assertEqual(E, decode(encode(E))),
     test_one(Rest, 1+N).
 
 e2j_test_vec(utf8) ->
@@ -669,31 +569,28 @@ e2j_test_vec(utf8) ->
      {<<"">>, "\"\""},
      {<<"\n\n\n">>, "\"\\n\\n\\n\""},
      {<<"\" \b\f\r\n\t\"">>, "\"\\\" \\b\\f\\r\\n\\t\\\"\""},
-     {obj_new(), "{}"},
-     {obj_from_list([{<<"foo">>, <<"bar">>}]), "{\"foo\":\"bar\"}"},
-     {obj_from_list([{<<"foo">>, <<"bar">>}, {<<"baz">>, 123}]),
+     {#{}, "{}"},
+     {#{<<"foo">> => <<"bar">>}, "{\"foo\":\"bar\"}"},
+     {#{<<"foo">> => <<"bar">>, <<"baz">> => 123},
       "{\"foo\":\"bar\",\"baz\":123}"},
      {[], "[]"},
      {[[]], "[[]]"},
      {[1, <<"foo">>], "[1,\"foo\"]"},
 
      %% json array in a json object
-     {obj_from_list([{<<"foo">>, [123]}]),
-      "{\"foo\":[123]}"},
+     {#{<<"foo">> => [123]}, "{\"foo\":[123]}"},
 
      %% json object in a json object
-     {obj_from_list([{<<"foo">>, obj_from_list([{<<"bar">>, true}])}]),
-      "{\"foo\":{\"bar\":true}}"},
+     {#{<<"foo">> => #{<<"bar">> => true}}, "{\"foo\":{\"bar\":true}}"},
 
      %% fold evaluation order
-     {obj_from_list([{<<"foo">>, []},
-                     {<<"bar">>, obj_from_list([{<<"baz">>, true}])},
-                     {<<"alice">>, <<"bob">>}]),
+     {#{<<"alice">> => <<"bob">>,
+        <<"bar">> => #{<<"baz">> => true},
+        <<"foo">> => []},
       "{\"foo\":[],\"bar\":{\"baz\":true},\"alice\":\"bob\"}"},
 
      %% json object in a json array
-     {[-123, <<"foo">>, obj_from_list([{<<"bar">>, []}]), null],
-      "[-123,\"foo\",{\"bar\":[]},null]"}
+     {[-123, <<"foo">>, #{<<"bar">> => []}, null], "[-123,\"foo\",{\"bar\":[]},null]"}
     ].
 
 %% test utf8 encoding
@@ -740,12 +637,9 @@ input_validation_test() ->
 
 inline_json_test() ->
     ?assertEqual(<<"\"iodata iodata\"">>,
-                 iolist_to_binary(
-                   encode({json, [<<"\"iodata">>, " iodata\""]}))),
-    ?assertEqual({struct, [{<<"key">>, <<"iodata iodata">>}]},
-                 decode(
-                   encode({struct,
-                           [{key, {json, [<<"\"iodata">>, " iodata\""]}}]}))),
+                 iolist_to_binary(encode({json, [<<"\"iodata">>, " iodata\""]}))),
+    ?assertEqual(#{<<"key">>, <<"iodata iodata">>},
+                 decode(encode(#{key => {json, [<<"\"iodata">>, " iodata\""]}}))),
     ok.
 
 big_unicode_test() ->
@@ -760,9 +654,9 @@ big_unicode_test() ->
 
 custom_decoder_test() ->
     ?assertEqual(
-       {struct, [{<<"key">>, <<"value">>}]},
+       #{<<"key">> => <<"value">>},
        (decoder([]))("{\"key\": \"value\"}")),
-    F = fun ({struct, [{<<"key">>, <<"value">>}]}) -> win end,
+    F = fun (#{<<"key">> => <<"value">>}) -> win end,
     ?assertEqual(
        win,
        (decoder([{object_hook, F}]))("{\"key\": \"value\"}")),
@@ -789,13 +683,13 @@ key_encode_test() ->
     %% cases
     ?assertEqual(
        <<"{\"foo\":1}">>,
-       iolist_to_binary(encode({struct, [{foo, 1}]}))),
+       iolist_to_binary(encode(#{foo => 1}))),
     ?assertEqual(
        <<"{\"foo\":1}">>,
-       iolist_to_binary(encode({struct, [{<<"foo">>, 1}]}))),
+       iolist_to_binary(encode(#{<<"foo">> => 1}))),
     ?assertEqual(
        <<"{\"foo\":1}">>,
-       iolist_to_binary(encode({struct, [{"foo", 1}]}))),
+       iolist_to_binary(encode(#{"foo" => 1}))),
 	?assertEqual(
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode([{foo, 1}]))),
@@ -805,10 +699,10 @@ key_encode_test() ->
     ?assertEqual(
        <<"{\"\\ud834\\udd20\":1}">>,
        iolist_to_binary(
-         encode({struct, [{[16#0001d120], 1}]}))),
+         encode(#{[16#0001d120] -> 1}))),
     ?assertEqual(
        <<"{\"1\":1}">>,
-       iolist_to_binary(encode({struct, [{1, 1}]}))),
+       iolist_to_binary(encode(#{1 => 1}))),
     ok.
 
 unsafe_chars_test() ->
@@ -870,25 +764,16 @@ handler_test() ->
     ok.
 
 encode_empty_test_() ->
-    [{A, ?_assertEqual(<<"{}">>, iolist_to_binary(encode(B)))}
-     || {A, B} <- [{"eep18 {}", {}},
-                   {"eep18 {[]}", {[]}},
-                   {"{struct, []}", {struct, []}}]].
+    ?_assertEqual(<<"{}">>, iolist_to_binary(encode({}))).
 
 encode_test_() ->
-    P = [{<<"k">>, <<"v">>}],
-    JSON = iolist_to_binary(encode({struct, P})),
-    [{atom_to_list(F),
-      ?_assertEqual(JSON, iolist_to_binary(encode(decode(JSON, [{format, F}]))))}
-     || F <- [struct, eep18, proplist]].
+    P = #{<<"k">> => <<"v">>},
+    JSON = iolist_to_binary(encode(P)),
+    ?_assertEqual(JSON, iolist_to_binary(encode(decode(JSON)))).
 
 format_test_() ->
-    P = [{<<"k">>, <<"v">>}],
-    JSON = iolist_to_binary(encode({struct, P})),
-    [{atom_to_list(F),
-      ?_assertEqual(A, decode(JSON, [{format, F}]))}
-     || {F, A} <- [{struct, {struct, P}},
-                   {eep18, {P}},
-                   {proplist, P}]].
+    P = #{<<"k">> => <<"v">>},
+    JSON = iolist_to_binary(encode(P)),
+    ?_assertEqual(P, decode(JSON)).
 
 -endif.

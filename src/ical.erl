@@ -381,7 +381,7 @@ final(First, Rules) ->
 
 final(First, Rules, {_, Max} = Range) ->
     case finite(Rules) of
-        Finite when Finite =:= true; Max =/= undefined ->
+        Finite when Finite; Max =/= undefined ->
             case recur(First, Rules, Range) of
                 [_|_] = Rs ->
                     lists:last(Rs);
@@ -456,36 +456,36 @@ expand(Period, _Proto, #rrule{freq=seconds}) ->
     [Period];
 
 expand({D, {H, Mi, _}},
-         {_, {_, _, Sec}},
-         #rrule{freq=minutes,
-                bysecond=BySeconds}) ->
+       {_, {_, _, Sec}},
+       #rrule{freq=minutes,
+              bysecond=BySeconds}) ->
     [{D, {H, Mi, S}} || S <- either(BySeconds, [Sec])];
 
 expand({D, {H, _, _}},
-         {_, {_, Min, Sec}},
-         #rrule{freq=hours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) ->
+       {_, {_, Min, Sec}},
+       #rrule{freq=hours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) ->
     [{D, {H, Mi, S}} || Mi <- either(ByMinutes, [Min]),
                         S <- either(BySeconds, [Sec])];
 
 expand({D, {_, _, _}},
-         {_, {Hour, Min, Sec}},
-         #rrule{freq=days,
-                byhour=ByHours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) ->
+       {_, {Hour, Min, Sec}},
+       #rrule{freq=days,
+              byhour=ByHours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) ->
     [{D, {H, Mi, S}} || H <- either(ByHours, [Hour]),
                         Mi <- either(ByMinutes, [Min]),
                         S <- either(BySeconds, [Sec])];
 
 expand(Period,
-         {Date, {Hour, Min, Sec}},
-         #rrule{freq=weeks,
-                byday=ByDays,
-                byhour=ByHours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) ->
+       {Date, {Hour, Min, Sec}},
+       #rrule{freq=weeks,
+              byday=ByDays,
+              byhour=ByHours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) ->
     WkDays = either(wkdays(ByDays), [calendar:day_of_the_week(Date)]),
     lists:foldl(fun ({D, _}, Acc) ->
                         case lists:member(calendar:day_of_the_week(D), WkDays) of
@@ -499,13 +499,13 @@ expand(Period,
                 end, [], [time:pass(Period, {N, days}) || N <- lists:seq(0, 6)]);
 
 expand({{Y, M, _}, _} = Period,
-         {Date, {Hour, Min, Sec}},
-         #rrule{freq=months,
-                bymonthday=undefined,
-                byday=ByDays,
-                byhour=ByHours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) when ByDays =/= undefined ->
+       {Date, {Hour, Min, Sec}},
+       #rrule{freq=months,
+              bymonthday=undefined,
+              byday=ByDays,
+              byhour=ByHours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) when ByDays =/= undefined ->
     WkDays = either(wkdays(ByDays), [calendar:day_of_the_week(Date)]),
     NumDays = calendar:last_day_of_the_month(Y, M),
     lists:foldl(fun ({D, _}, Acc) ->
@@ -520,24 +520,24 @@ expand({{Y, M, _}, _} = Period,
                 end, [], [time:pass(Period, {N, days}) || N <- lists:seq(0, NumDays - 1)]);
 
 expand({{Y, M, _}, _},
-         {{_, _, DoM}, {Hour, Min, Sec}},
-         #rrule{freq=months,
-                bymonthday=ByMonthDays,
-                byhour=ByHours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) ->
+       {{_, _, DoM}, {Hour, Min, Sec}},
+       #rrule{freq=months,
+              bymonthday=ByMonthDays,
+              byhour=ByHours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) ->
     [{{Y, M, D}, {H, Mi, S}} || D <- either(modays(ByMonthDays, calendar:last_day_of_the_month(Y, M)), [DoM]),
                                 H <- either(ByHours, [Hour]),
                                 Mi <- either(ByMinutes, [Min]),
                                 S <- either(BySeconds, [Sec])];
 
 expand({{Y, _, _}, _} = Period,
-         {Date, {Hour, Min, Sec}},
-         #rrule{freq=years,
-                byday=ByDays,
-                byhour=ByHours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) when ByDays =/= undefined ->
+       {Date, {Hour, Min, Sec}},
+       #rrule{freq=years,
+              byday=ByDays,
+              byhour=ByHours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) when ByDays =/= undefined ->
     WkDays = either(wkdays(ByDays), [calendar:day_of_the_week(Date)]),
     NumDays = case calendar:is_leap_year(Y) of
                   true ->
@@ -557,13 +557,13 @@ expand({{Y, _, _}, _} = Period,
                 end, [], [time:pass(Period, {N, days}) || N <- lists:seq(0, NumDays - 1)]);
 
 expand({{Y, _, _}, _},
-         {{_, Month, DoM}, {Hour, Min, Sec}},
-         #rrule{freq=years,
-                bymonth=ByMonths,
-                bymonthday=ByMonthDays,
-                byhour=ByHours,
-                byminute=ByMinutes,
-                bysecond=BySeconds}) ->
+       {{_, Month, DoM}, {Hour, Min, Sec}},
+       #rrule{freq=years,
+              bymonth=ByMonths,
+              bymonthday=ByMonthDays,
+              byhour=ByHours,
+              byminute=ByMinutes,
+              bysecond=BySeconds}) ->
     [{{Y, M, D}, {H, Mi, S}} || M <- either(ByMonths, [Month]),
                                 D <- either(modays(ByMonthDays, calendar:last_day_of_the_month(Y, M)), [DoM]),
                                 H <- either(ByHours, [Hour]),
