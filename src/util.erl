@@ -25,6 +25,10 @@
          lower/1,
          upper/1]).
 
+-export([do/1,
+         repeat/2,
+         timeit/2]).
+
 -define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
                      (C >= $A andalso C =< $Z) orelse
                      (C >= $0 andalso C =< $9) orelse
@@ -211,3 +215,19 @@ upper(Bin) when is_binary(Bin) ->
     unicode:characters_to_binary(upper(unicode:characters_to_list(Bin)));
 upper(Str) ->
     string:to_upper(Str).
+
+do({F, A}) ->
+    apply(F, A);
+do({M, F, A}) ->
+    apply(M, F, A).
+
+repeat(D, N) ->
+    repeat(D, N, undefined).
+
+repeat(_, 0, Last) ->
+    Last;
+repeat(D, N, _) ->
+    repeat(D, N - 1, do(D)).
+
+timeit(D, N) ->
+    timer:tc(fun repeat/2, [D, N]).
