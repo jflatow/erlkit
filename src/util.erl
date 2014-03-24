@@ -11,28 +11,17 @@
          hex/1,
          hexdigit/1,
          unhexdigit/1,
-         urlencode/1,
-         quote_plus/1,
-         unquote/1,
          count/3,
          enum/3,
          join/2,
          join/3,
+         snap/2,
          disfix/2,
          lstrip/2,
          rstrip/2,
          strip/2,
          lower/1,
          upper/1]).
-
--export([do/1,
-         repeat/2,
-         timeit/2]).
-
--define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
-                     (C >= $A andalso C =< $Z) orelse
-                     (C >= $0 andalso C =< $9) orelse
-                     (C =:= $\. orelse C =:= $- orelse C =:= $~ orelse C =:= $_))).
 
 atom(Any) ->
     atom(Any, false).
@@ -91,50 +80,31 @@ mod(X, Y) ->
 
 hex(List) when is_list(List) ->
     hex(list_to_binary(List));
-hex(<<Q:4, Rest/bitstring>>) ->
-    <<(hexdigit(Q)), (hex(Rest))/binary>>;
+hex(<<Q:4, Rest/bits>>) ->
+    <<(hexdigit(Q)), (hex(Rest))/bits>>;
 hex(<<>>) ->
     <<>>.
 
-hexdigit(C) when C < 10 -> $0 + C;
-hexdigit(C) when C < 16 -> $A + (C - 10).
+hexdigit(00) -> $0;
+hexdigit(01) -> $1;
+hexdigit(02) -> $2;
+hexdigit(03) -> $3;
+hexdigit(04) -> $4;
+hexdigit(05) -> $5;
+hexdigit(06) -> $6;
+hexdigit(07) -> $7;
+hexdigit(08) -> $8;
+hexdigit(09) -> $9;
+hexdigit(10) -> $A;
+hexdigit(11) -> $B;
+hexdigit(12) -> $C;
+hexdigit(13) -> $D;
+hexdigit(14) -> $E;
+hexdigit(15) -> $F.
 
 unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
-
-urlencode(Props) ->
-    list_to_binary(join([<<(quote_plus(K))/binary, $=, (quote_plus(V))/binary>> || {K, V} <- Props], $&)).
-
-quote_plus(Atom) when is_atom(Atom) ->
-    quote_plus(atom_to_list(Atom));
-quote_plus(Int) when is_integer(Int) ->
-    quote_plus(integer_to_list(Int));
-quote_plus(IO) ->
-    quote_plus(iolist_to_binary(IO), <<>>).
-
-quote_plus(<<>>, Acc) ->
-    Acc;
-quote_plus(<<C, Rest/binary>>, Acc) when ?QS_SAFE(C) ->
-    quote_plus(Rest, <<Acc/binary, C>>);
-quote_plus(<<" ", Rest/binary>>, Acc) ->
-    quote_plus(Rest, <<Acc/binary, "+">>);
-quote_plus(<<Hi:4, Lo:4, Rest/binary>>, Acc) ->
-    quote_plus(Rest, <<Acc/binary, "%", (hexdigit(Hi)), (hexdigit(Lo))>>).
-
-unquote(String) when is_list(String) ->
-    unquote(list_to_binary(String));
-unquote(Binary) ->
-    unquote(Binary, <<>>).
-
-unquote(<<>>, Acc) ->
-    Acc;
-unquote(<<"+", Rest/binary>>, Acc) ->
-    unquote(Rest, <<Acc/binary, " ">>);
-unquote(<<"%", Hi, Lo, Rest/binary>>, Acc) ->
-    unquote(Rest, <<Acc/binary, (unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4))>>);
-unquote(<<C, Rest/binary>>, Acc) ->
-    unquote(Rest, <<Acc/binary, C>>).
 
 count(Fun, Acc, N) when is_number(N) ->
     count(Fun, Acc, {0, N});
@@ -162,6 +132,16 @@ join([A, B|Rest], Sep, Skip) ->
 join(List, _Sep, _Skip) ->
     List.
 
+snap(Data, Sep) ->
+    case binary:split(Data, Sep) of
+        [A, B] ->
+            {A, B};
+        [A] ->
+            {A, <<>>};
+        [] ->
+            {<<>>, <<>>}
+    end.
+
 disfix(Prefix, Str) when is_list(Str), is_binary(Prefix) ->
     disfix(binary_to_list(Prefix), Str);
 disfix(Prefix, Str) when is_list(Str) ->
@@ -171,7 +151,7 @@ disfix(Prefix, Bin) when is_binary(Bin), is_list(Prefix) ->
 disfix(Prefix, Bin) when is_binary(Bin) ->
     Size = size(Prefix),
     case Bin of
-        <<Prefix:Size/binary, Rest/binary>> ->
+        <<Prefix:Size/bits, Rest/bits>> ->
             Rest;
         _ ->
             Bin
@@ -179,7 +159,7 @@ disfix(Prefix, Bin) when is_binary(Bin) ->
 
 lstrip([C|Rest], C) ->
     lstrip(Rest, C);
-lstrip(<<C, Rest/binary>>, C) ->
+lstrip(<<C, Rest/bits>>, C) ->
     lstrip(Rest, C);
 lstrip(Seq, _) ->
     Seq.
@@ -193,7 +173,7 @@ rstrip([C|Rest], C) ->
     end;
 rstrip([O|Rest], C) ->
     [O|rstrip(Rest, C)];
-rstrip(<<_, _/binary>> = Bin, C) when is_binary(Bin) ->
+rstrip(<<_, _/bits>> = Bin, C) when is_binary(Bin) ->
     case binary:last(Bin) of
         C ->
             rstrip(binary:part(Bin, 0, size(Bin) - 1), C);
@@ -215,19 +195,3 @@ upper(Bin) when is_binary(Bin) ->
     unicode:characters_to_binary(upper(unicode:characters_to_list(Bin)));
 upper(Str) ->
     string:to_upper(Str).
-
-do({F, A}) ->
-    apply(F, A);
-do({M, F, A}) ->
-    apply(M, F, A).
-
-repeat(D, N) ->
-    repeat(D, N, undefined).
-
-repeat(_, 0, Last) ->
-    Last;
-repeat(D, N, _) ->
-    repeat(D, N - 1, do(D)).
-
-timeit(D, N) ->
-    timer:tc(fun repeat/2, [D, N]).
