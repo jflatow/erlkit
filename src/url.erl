@@ -3,7 +3,8 @@
 -export([empty/0,
          parse/1,
          parse/2,
-         format/1]).
+         format/1,
+         q/2]).
 
 -export([encode/1,
          decode/1,
@@ -103,6 +104,11 @@ format(fragment, #{fragment := Fragment}, Acc) when Fragment =/= undefined ->
     <<Acc/bits, $#, Fragment/bits>>;
 format(fragment, _, Acc) ->
     Acc.
+
+q(URL = #{}, Params) ->
+    format(URL#{query => list_to_binary(encode(Params))});
+q(URL, Params) ->
+    q(parse(URL), Params).
 
 decode(<<>>) ->
     [];
