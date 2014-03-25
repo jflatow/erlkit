@@ -15,6 +15,7 @@ u(S, A, P, Q, F) ->
       fragment => b(F)}.
 
 p(U) -> url:parse(U).
+f(P) -> url:format(P).
 
 parse_test() ->
     ?assertEqual(u("foo", "example.com:8042", "/over/there", "name=ferret", "nose"),
@@ -37,3 +38,18 @@ parse_test() ->
                  p("telnet://192.0.2.16:80/")),
     ?assertEqual(u("urn", undefined, "oasis:names:specification:docbook:dtd:xml:4.1.2"),
                  p("urn:oasis:names:specification:docbook:dtd:xml:4.1.2")).
+
+format_test() ->
+    URLs = ["foo://example.com:8042/over/there?name=ferret#nose",
+            "urn:example:animal:ferret:nose",
+            "ftp://ftp.is.co.za/rfc/rfc1808.txt",
+            "http://www.ietf.org/rfc/rfc2396.txt",
+            "ldap://[2001:db8::7]/c=GB?objectClass?one",
+            "mailto:John.Doe@example.com",
+            "news:comp.infosystems.www.servers.unix",
+            "tel:+1-816-555-1212",
+            "telnet://192.0.2.16:80/",
+            "urn:oasis:names:specification:docbook:dtd:xml:4.1.2"],
+    lists:foldl(fun (U, _) ->
+                        ?assertEqual(util:bin(U), f(p(U)))
+                end, ok, URLs).

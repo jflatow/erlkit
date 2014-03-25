@@ -2,7 +2,8 @@
 
 -export([empty/0,
          parse/1,
-         parse/2]).
+         parse/2,
+         format/1]).
 
 -export([encode/1,
          decode/1,
@@ -75,8 +76,34 @@ parse(fragment, <<C, Rest/bits>>, URL, Buf) ->
 parse(fragment, <<>>, URL, Buf) ->
     URL#{fragment := Buf}.
 
-%% NB: decode and unescape are slow, provided here just for completeness
-%%     use e.g. cowlib if you need faster parsing
+format(URL) ->
+    format(scheme, URL, <<>>).
+
+format(scheme, URL = #{scheme := Scheme}, Acc) when Scheme =/= undefined ->
+    format(authority, URL, <<Acc/bits, Scheme/bits, $:>>);
+format(scheme, URL, Acc) ->
+    format(authority, URL, Acc);
+
+format(authority, URL = #{authority := Authority}, Acc) when Authority =/= undefined ->
+    format(path, URL, <<Acc/bits, "//", Authority/bits>>);
+format(authority, URL, Acc) ->
+    format(path, URL, Acc);
+
+format(path, URL = #{path := Path}, Acc) when Path =/= undefined ->
+    format(query, URL, <<Acc/bits, Path/bits>>);
+format(path, URL, Acc) ->
+    format(query, URL, Acc);
+
+format(query, URL = #{query := Query}, Acc) when Query =/= undefined ->
+    format(fragment, URL, <<Acc/bits, $?, Query/bits>>);
+format(query, URL, Acc) ->
+    format(fragment, URL, Acc);
+
+format(fragment, #{fragment := Fragment}, Acc) when Fragment =/= undefined ->
+    <<Acc/bits, $#, Fragment/bits>>;
+format(fragment, _, Acc) ->
+    Acc.
+
 decode(<<>>) ->
     [];
 decode(Data) when is_binary(Data) ->
