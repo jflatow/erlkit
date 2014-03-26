@@ -3,8 +3,10 @@
 -export([empty/0,
          parse/1,
          parse/2,
-         format/1,
-         q/2]).
+         format/1]).
+
+-export([up/2, up/3]).
+-export([p/2, q/2, f/2, u/2, u/3, u/4]).
 
 -export([encode/1,
          decode/1,
@@ -105,10 +107,26 @@ format(fragment, #{fragment := Fragment}, Acc) when Fragment =/= undefined ->
 format(fragment, _, Acc) ->
     Acc.
 
-q(URL = #{}, Params) ->
-    format(URL#{query => list_to_binary(encode(Params))});
-q(URL, Params) ->
-    q(parse(URL), Params).
+up(URL, Opts) ->
+    lists:foldl(fun ({F, V}, U) -> up(F, U, V) end, URL, Opts).
+
+up(Field, URL, Value) when not is_map(URL) ->
+    up(Field, parse(URL), Value);
+up(_, URL, undefined) ->
+    URL;
+up(path, URL, Parts) ->
+    URL#{path => filename:join([<<$/>>|Parts])};
+up(query, URL, Params) ->
+    URL#{query => list_to_binary(encode(Params))};
+up(fragment, URL, Params) ->
+    URL#{fragment => list_to_binary(encode(Params))}.
+
+p(URL, Parts) -> format(up(path, URL, Parts)).
+q(URL, Params) -> format(up(query, URL, Params)).
+f(URL, Params) -> format(up(fragment, URL, Params)).
+u(URL, Opts) -> format(up(URL, Opts)).
+u(URL, P, Q) -> u(URL, [{path, P}, {query, Q}]).
+u(URL, P, Q, F) -> u(URL, [{path, P}, {query, Q}, {fragment, F}]).
 
 decode(<<>>) ->
     [];
@@ -117,7 +135,7 @@ decode(Data) when is_binary(Data) ->
     {K, V} = snap(KV, <<$=>>),
     [{unescape(K), unescape(V)}|decode(Rest)];
 decode(Data) when is_list(Data) ->
-    decode(iolist_to_binary(Data)).
+    decode(list_to_binary(Data)).
 
 encode([{K, V}|[_|_] = Rest]) ->
     [escape(K), $=, escape(V), $&|encode(Rest)];
@@ -139,7 +157,7 @@ escape(Atom) when is_atom(Atom) ->
 escape(Int) when is_integer(Int) ->
     escape(integer_to_list(Int));
 escape(List) when is_list(List) ->
-    escape(iolist_to_binary(List)).
+    escape(list_to_binary(List)).
 
 unescape(<<$+, Rest/bits>>) ->
     <<" ", (unescape(Rest))/bits>>;
@@ -150,4 +168,4 @@ unescape(<<C, Rest/bits>>) ->
 unescape(<<>>) ->
     <<>>;
 unescape(String) when is_list(String) ->
-    unescape(iolist_to_binary(String)).
+    unescape(list_to_binary(String)).
