@@ -112,6 +112,8 @@ json_encode({array, Array}, State) when is_list(Array) ->
     json_encode_array(Array, State);
 json_encode({json, IoList}, _State) ->
     IoList;
+json_encode(Tuple, State=#encoder{handler=null}) when is_tuple(Tuple) ->
+    json_encode_array(tuple_to_list(Tuple), State);
 json_encode(Bad, #encoder{handler=null}) ->
     exit({json_encode, {bad_term, Bad}});
 json_encode(Bad, State=#encoder{handler=Handler}) ->

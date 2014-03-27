@@ -119,9 +119,9 @@ up(_, URL, undefined) ->
 up(path, URL, Parts) ->
     URL#{path => filename:join([<<$/>>|Parts])};
 up(query, URL, Params) ->
-    URL#{query => list_to_binary(encode(Params))};
+    URL#{query => enc(Params)};
 up(fragment, URL, Params) ->
-    URL#{fragment => list_to_binary(encode(Params))}.
+    URL#{fragment => enc(Params)}.
 
 p(URL, Parts) -> format(up(path, URL, Parts)).
 q(URL, Params) -> format(up(query, URL, Params)).
