@@ -11,7 +11,9 @@
 -export([encode/1,
          decode/1,
          escape/1,
-         unescape/1]).
+         unescape/1,
+         esc/1,
+         enc/1]).
 
 -import(util, [snap/2,
                hexdigit/1,
@@ -169,3 +171,6 @@ unescape(<<>>) ->
     <<>>;
 unescape(String) when is_list(String) ->
     unescape(list_to_binary(String)).
+
+esc(Data) -> iolist_to_binary(escape(Data)).
+enc(List) -> iolist_to_binary(encode(List)).
