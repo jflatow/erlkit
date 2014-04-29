@@ -188,7 +188,7 @@ path_to_int(Path, Depth, Base) ->
                            end, {num:pow(Unit, Depth - 1), 0}, filename:split(Path))).
 
 rel(Root, Path) ->
-    str(util:strip(util:disfix(Root, Path), $/)).
+    util:strip(util:disfix(str(Root), str(Path)), $/).
 
 str(List) when is_list(List) ->
     List;
