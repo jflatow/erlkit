@@ -12,6 +12,8 @@
          hexdigit/1,
          unhexdigit/1,
          count/3,
+         enum/1,
+         enum/2,
          enum/3,
          join/2,
          join/3,
@@ -112,6 +114,14 @@ count(Fun, Acc, {I, N}) when I < N ->
     count(Fun, Fun(I, Acc), {I + 1, N});
 count(_, Acc, _) ->
     Acc.
+
+enum(List) ->
+    enum(List, 0).
+
+enum([H|T], N) ->
+    [{N, H}|enum(T, N + 1)];
+enum([], _) ->
+    [].
 
 enum(Fun, Acc, List) ->
     element(2, lists:foldl(fun (I, {N, A}) ->
