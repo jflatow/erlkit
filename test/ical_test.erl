@@ -659,17 +659,23 @@ rrule_example30_test() ->
                 {{2004,11,2},{9,0,0}}]).
 
 rrule_example31_test() ->
-    _ = {not_supported,
-         "RRULE:FREQ=MONTHLY;COUNT=3;BYDAY=TU,WE,TH;BYSETPOS=3",
-         "19970904T090000Z"},
-    ok.
-
+    rrule_test("RRULE:FREQ=MONTHLY;COUNT=3;BYDAY=TU,WE,TH;BYSETPOS=3",
+               "19970904T090000Z",
+               [{{1997,9,4},{9,0,0}},
+                {{1997,10,7},{9,0,0}},
+                {{1997,11,6},{9,0,0}}]).
 
 rrule_example32_test() ->
-    _ = {not_supported,
-         "RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-2",
-         "19970929T090000Z"},
-    ok.
+    rrule_test("RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-2",
+               "19970929T090000Z",
+               {undefined, {{1998, 3, 31}, {9, 0, 0}}},
+               [{{1997,9,29},{9,0,0}},
+                {{1997,10,30},{9,0,0}},
+                {{1997,11,27},{9,0,0}},
+                {{1997,12,30},{9,0,0}},
+                {{1998,1,29},{9,0,0}},
+                {{1998,2,26},{9,0,0}},
+                {{1998,3,30},{9,0,0}}]).
 
 rrule_example33_test() ->
     rrule_test("RRULE:FREQ=HOURLY;INTERVAL=3;UNTIL=19970902T170000Z",

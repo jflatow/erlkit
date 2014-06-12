@@ -32,7 +32,7 @@
                lower/1,
                upper/1]).
 
-%% NB: BYYEARDAY, BYWEEKNO, BYSETPOS not yet supported
+%% NB: BYYEARDAY, BYWEEKNO, not yet supported
 -record(rrule, {freq,
                 until,
                 count,
@@ -43,6 +43,7 @@
                 byday,
                 bymonthday,
                 bymonth,
+                bysetpos,
                 wkst,
                 params}).
 
@@ -198,6 +199,8 @@ parse(recur, [<<"BYMONTHDAY=", L/binary>>|Rest], RRule) ->
     parse(recur, Rest, RRule#rrule{bymonthday=[int(I) || I <- parse(list, L)]});
 parse(recur, [<<"BYMONTH=", L/binary>>|Rest], RRule) ->
     parse(recur, Rest, RRule#rrule{bymonth=[int(I) || I <- parse(list, L)]});
+parse(recur, [<<"BYSETPOS=", L/binary>>|Rest], RRule) ->
+    parse(recur, Rest, RRule#rrule{bysetpos=[int(I) || I <- parse(list, L)]});
 parse(recur, [<<"WKST=", Day/binary>>|Rest], RRule) ->
     parse(recur, Rest, RRule#rrule{wkst=parse(day, Day)});
 parse(recur, [_|Rest], RRule) ->
@@ -328,6 +331,8 @@ format(recur, bymonthday, #rrule{bymonthday=[_] = L}) ->
     <<"BYMONTHDAY=", (format(list, [bin(I) || I <- L]))/binary>>;
 format(recur, bymonth, #rrule{bymonth=[_] = L}) ->
     <<"BYMONTH=", (format(list, [bin(I) || I <- L]))/binary>>;
+format(recur, bysetpos, #rrule{bysetpos=[_] = L}) ->
+    <<"BYSETPOS=", (format(list, [bin(I) || I <- L]))/binary>>;
 format(recur, wkst, #rrule{wkst=Day}) when Day =/= undefined, Day =/= 1 ->
     <<"WKST=", (format(day, Day))/binary>>;
 format(recur, _, #rrule{}) ->
@@ -419,7 +424,7 @@ recur(Period, First, RRule, {Min, Max}) ->
 recur(Period, _, _, {_, Max}, Acc) when Max =/= undefined, Period > Max ->
     Acc;
 recur(Period, First, #rrule{freq=Freq, interval=I, count=C} = RRule, Range, Acc) ->
-    case lists:umerge(lists:usort([T || T <- expand(Period, First, RRule), filter(T, Range, RRule)]), Acc) of
+    case lists:umerge(setpos(lists:usort([T || T <- expand(Period, First, RRule), filter(T, Range, RRule)]), First, RRule), Acc) of
         List when is_integer(C), length(List) >= C ->
             lists:sublist(List, C);
         List ->
@@ -600,6 +605,18 @@ filter_(byminute, {_, {_, M, _}}, #rrule{byminute=ByMinutes}) when ByMinutes =/=
     lists:member(M, ByMinutes);
 filter_(_, _, _) ->
     true.
+
+setpos(Times, _First, #rrule{bysetpos=undefined}) ->
+    Times;
+setpos([First|Rest], First, #rrule{bysetpos=[_|BySetPos]}) ->
+    setpos(Rest, First, #rrule{bysetpos=BySetPos});
+setpos(Times, _First, #rrule{bysetpos=BySetPos}) ->
+    [case P of
+         P when P > 0 ->
+             lists:nth(+P, Times);
+         P when P < 0 ->
+             lists:nth(-P, lists:reverse(Times))
+     end || P <- BySetPos].
 
 finite(Rules) when is_list(Rules) ->
     lists:all(fun finite/1, Rules);
