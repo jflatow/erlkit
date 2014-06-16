@@ -531,10 +531,12 @@ expand({{Y, M, _}, _},
               byhour=ByHours,
               byminute=ByMinutes,
               bysecond=BySeconds}) ->
-    [{{Y, M, D}, {H, Mi, S}} || D <- either(modays(ByMonthDays, calendar:last_day_of_the_month(Y, M)), [DoM]),
+    NumDays = calendar:last_day_of_the_month(Y, M),
+    [{{Y, M, D}, {H, Mi, S}} || D <- either(modays(ByMonthDays, NumDays), [DoM]),
                                 H <- either(ByHours, [Hour]),
                                 Mi <- either(ByMinutes, [Min]),
-                                S <- either(BySeconds, [Sec])];
+                                S <- either(BySeconds, [Sec]),
+                                D =< NumDays];
 
 expand({{Y, _, _}, _} = Period,
        {Date, {Hour, Min, Sec}},
