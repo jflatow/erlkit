@@ -2,6 +2,7 @@
 
 -export([ago/1,
          ago/2,
+         days/2,
          diff/2,
          pass/1,
          pass/2,
@@ -14,7 +15,9 @@
          parse/1,
          parse/2,
          stamp/1,
-         stamp/2]).
+         stamp/2,
+         wknum/1,
+         wknum/2]).
 
 -export([read_rfc3339/1,
          read_rfc3339/2]).
@@ -35,6 +38,9 @@ ago(Time, {N, Unit}) when is_integer(N); is_atom(Unit) ->
     pass(Time, {-N, Unit});
 ago(Time, Elapsed) ->
     datetime(seconds(Time) - seconds(Elapsed)).
+
+days(T1, T2) ->
+    diff(T1, T2) div (?Day).
 
 diff(T1, T2) ->
     seconds(T2) - seconds(T1).
@@ -94,6 +100,8 @@ seconds({N, seconds}) ->
     N * ?Second;
 seconds(Seconds) when is_number(Seconds) ->
     Seconds;
+seconds({Y, M, D} = Date) when is_number(Y), is_number(M), is_number(D) ->
+    seconds({Date, {0, 0, 0}});
 seconds({D, {H, M, S}}) when is_float(S) ->
     seconds({D, {H, M, trunc(S)}}) + (S - trunc(S));
 seconds({_, _} = DateTime) ->
@@ -169,3 +177,14 @@ stamp({{Y, M, D}, {H, Mi, S}}, rfc3339) ->
     list_to_binary(io_lib:format("~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ", [Y, M, D, H, Mi, S]));
 stamp(Time, rfc3339) ->
     stamp(datetime(Time)).
+
+wknum(Time) ->
+    wknum(Time, 1).
+
+wknum({Y, _, _} = Date, WeekStart) ->
+    case days({Y, 1, 4}, Date) + mod(calendar:day_of_the_week({Y, 1, 4}) - WeekStart, 7) of
+        Days when Days < 0 ->
+            {Y - 1, 53};
+        Days ->
+            {Y, Days div 7 + 1}
+    end.

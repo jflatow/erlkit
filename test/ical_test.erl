@@ -552,10 +552,12 @@ rrule_example23_test() ->
     ok.
 
 rrule_example24_test() ->
-    _ = {not_supported,
-         "RRULE:FREQ=YEARLY;BYDAY=20MO",
-         "19970519T090000"},
-    ok.
+    rrule_test("RRULE:FREQ=YEARLY;BYDAY=20MO",
+               "19970519T090000Z",
+               {undefined, {{2000,1,1},{9,0,0}}},
+               [{{1997,5,19},{9,0,0}},
+                {{1998,5,18},{9,0,0}},
+                {{1999,5,17},{9,0,0}}]).
 
 rrule_example25_test() ->
     _ = {not_supported,

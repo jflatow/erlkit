@@ -601,6 +601,13 @@ filter_(byday, {{Y, M, D} = Date, _}, #rrule{freq=months, byday=ByDays}) when By
     (lists:member({any, DoW}, ByDays) orelse
      lists:member({WoM, DoW}, ByDays) orelse
      lists:member({RWoM, DoW}, ByDays));
+filter_(byday, {{Y, _, _} = Date, _}, #rrule{freq=years, byday=ByDays}) when ByDays =/= undefined ->
+    DoW = calendar:day_of_the_week(Date),
+    WoY = time:days({Y, 1, 1}, Date) div 7 + 1,
+    RWoY = time:days({Y, 12, 31}, Date) div 7 + 1,
+    (lists:member({any, DoW}, ByDays) orelse
+     lists:member({WoY, DoW}, ByDays) orelse
+     lists:member({RWoY, DoW}, ByDays));
 filter_(byhour, {_, {H, _, _}}, #rrule{byhour=ByHours}) when ByHours =/= undefined ->
     lists:member(H, ByHours);
 filter_(byminute, {_, {_, M, _}}, #rrule{byminute=ByMinutes}) when ByMinutes =/= undefined ->
