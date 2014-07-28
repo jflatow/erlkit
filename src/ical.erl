@@ -617,6 +617,8 @@ filter_(_, _, _) ->
 
 setpos(Times, _First, #rrule{bysetpos=undefined}) ->
     Times;
+setpos([], _First, _RRule) ->
+    [];
 setpos([First|Rest], First, #rrule{bysetpos=[_|BySetPos]}) ->
     setpos(Rest, First, #rrule{bysetpos=BySetPos});
 setpos(Times, _First, #rrule{bysetpos=BySetPos}) ->
