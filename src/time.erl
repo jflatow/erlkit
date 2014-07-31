@@ -11,6 +11,7 @@
          unow/0,
          datetime/1,
          seconds/1,
+         valid/1,
          range/1,
          parse/1,
          parse/2,
@@ -49,16 +50,16 @@ pass(Elapse) ->
     pass(unow(), Elapse).
 
 pass({{Y, M, D}, {H, Mi, S}}, {N, years}) ->
-    {{Y + N, M, D}, {H, Mi, S}};
+    valid({{Y + N, M, D}, {H, Mi, S}});
 pass({{Y, M, D}, {H, Mi, S}}, {N, months}) ->
-    {{case M + N of
-          L when L < 1 -> Y + (L div 12) - 1;
-          L when L > 0 -> Y + (L - 1) div 12
-      end,
-      case mod(M + N, 12) of
-          0 -> 12;
-          O -> O
-      end, D}, {H, Mi, S}};
+    valid({{case M + N of
+                L when L < 1 -> Y + (L div 12) - 1;
+                L when L > 0 -> Y + (L - 1) div 12
+            end,
+            case mod(M + N, 12) of
+                0 -> 12;
+                O -> O
+            end, D}, {H, Mi, S}});
 pass(Time, []) ->
     Time;
 pass(Time, [H|Tail]) ->
@@ -115,6 +116,16 @@ range({Start, {{_, _, _}, {_, _, _}} = Stop, Step}) ->
     [Start|range({pass(Start, Step), Stop, Step})];
 range({Start, Duration, Step})  ->
     range({Start, pass(Start, Duration), Step}).
+
+valid({{Y, M, D}, _} = DateTime) ->
+    case calendar:last_day_of_the_month(Y, M) of
+        Last when D > Last ->
+            time:pass({Y, M, Last}, {D - Last, days});
+        _ when D < 1 ->
+            time:pass({Y, M, 1}, {1 - D, days});
+        _ ->
+            DateTime
+    end.
 
 parse(Timestamp) when is_list(Timestamp) ->
     parse(list_to_binary(Timestamp));
