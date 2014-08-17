@@ -11,10 +11,20 @@
          hex/1,
          hexdigit/1,
          unhexdigit/1,
+         get/2,
+         get/3,
+         set/3,
+         modify/3,
+         modify/4,
+         increment/2,
+         increment/3,
+         update/2,
          count/3,
          enum/1,
          enum/2,
          enum/3,
+         fold/3,
+         iter/1,
          join/2,
          join/3,
          snap/2,
@@ -108,6 +118,50 @@ unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
 
+get(Obj, Key) ->
+    get(Obj, Key, undefined).
+
+get(Map, Key, Default) when is_map(Map) ->
+    case maps:find(Key, Map) of
+        {ok, Val} ->
+            Val;
+        error ->
+            Default
+    end;
+get(List, Key, Default) when is_list(List) ->
+    proplists:get_value(Key, List, Default);
+get(Dict, Key, Default) when element(1, Dict) =:= dict -> %% NB: technically opaque
+    case dict:find(Key, Dict) of
+        {ok, Val} ->
+            Val;
+        error ->
+            Default
+    end.
+
+set(Map, Key, Val) when is_map(Map) ->
+    maps:put(Key, Val, Map);
+set(List, Key, Val) when is_list(List) ->
+    lists:keystore(Key, 1, List, {Key, Val});
+set(Dict, Key, Val) when element(1, Dict) =:= dict -> %% NB: technically opaque
+    dict:store(Key, Val, Dict).
+
+modify(Obj, Key, Fun) ->
+    modify(Obj, Key, Fun, undefined).
+
+modify(Obj, Key, Fun, Initial) ->
+    set(Obj, Key, Fun(get(Obj, Key, Initial))).
+
+increment(Obj, Key) ->
+    increment(Obj, Key, 1).
+
+increment(Obj, Key, Num) ->
+    modify(Obj, Key, fun (V) -> V + Num end, 0).
+
+update(Old, New) when is_map(Old), is_map(New) ->
+    maps:merge(Old, New);
+update(Old, New) ->
+    fold(fun ({K, V}, A) -> set(A, K, V) end, Old, New).
+
 count(Fun, Acc, N) when is_number(N) ->
     count(Fun, Acc, {0, N});
 count(Fun, Acc, {I, N}) when I < N ->
@@ -127,6 +181,20 @@ enum(Fun, Acc, List) ->
     element(2, lists:foldl(fun (I, {N, A}) ->
                                    {N + 1, Fun(N, I, A)}
                            end, {0, Acc}, List)).
+
+fold(Fun, Acc, Map) when is_map(Map) ->
+    maps:fold(fun (K, V, A) -> Fun({K, V}, A) end, Acc, Map);
+fold(Fun, Acc, List) when is_list(List) ->
+    lists:foldl(Fun, Acc, List);
+fold(Fun, Acc, Dict) when element(1, Dict) =:= dict -> %% NB: technically opaque
+    dict:fold(Fun, Acc, Dict).
+
+iter(Map) when is_map(Map) ->
+    maps:to_list(Map);
+iter(List) when is_list(List) ->
+    List;
+iter(Dict) when element(1, Dict) =:= dict -> %% NB: technically opaque
+    dict:to_list(Dict).
 
 join([A, B|Rest], Sep) ->
     [A, Sep|join([B|Rest], Sep)];
