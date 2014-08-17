@@ -11,6 +11,7 @@
          lines/1,
          lines/2,
          join/2,
+         joinl/2,
          head/1,
          head/2,
          last/1,
@@ -40,7 +41,7 @@ foldl([Path|_], _, Acc, {_, Upper}, _) when Upper =/= undefined, Path >= Upper -
 foldl([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Lower =:= undefined; Path >= Lower ->
     case file:list_dir(Path) of
         {ok, Paths} ->
-            foldl([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
+            foldl(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Lower, Upper}, Order);
         {error, enotdir} ->
             foldl(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order);
         {error, enoent} ->
@@ -51,7 +52,7 @@ foldl([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Path < Lower ->
         true ->
             case file:list_dir(Path) of
                 {ok, Paths} ->
-                    foldl([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Lower, Upper}, Order);
+                    foldl(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Lower, Upper}, Order);
                 _ ->
                     foldl(Tail, Fun, Acc, {Lower, Upper}, Order)
             end;
@@ -80,7 +81,7 @@ foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Lower =/= undefined, Pa
         true ->
             case file:list_dir(Path) of
                 {ok, Paths} ->
-                    foldr([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Upper, Lower}, Order);
+                    foldr(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Upper, Lower}, Order);
                 _ ->
                     foldr(Tail, Fun, Acc, {Upper, Lower}, Order)
             end;
@@ -90,7 +91,7 @@ foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Lower =/= undefined, Pa
 foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Upper =:= undefined; Path < Upper ->
     case file:list_dir(Path) of
         {ok, Paths} ->
-            foldr([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Fun, Acc, {Upper, Lower}, Order);
+            foldr(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Upper, Lower}, Order);
         {error, enotdir} ->
             foldr(Tail, Fun, Fun(Path, Acc), {Upper, Lower}, Order);
         {error, enoent} ->
@@ -129,8 +130,11 @@ lines(Path) ->
 lines(Path, Opts) ->
     lists:reverse(foldlines(Path, fun (Line, Acc) -> [Line|Acc] end, [], Opts)).
 
-join(Dir, Names) ->
-    [filename:join(Dir, Name) || Name <- Names].
+join(Dir, Name) ->
+    filename:join(Dir, Name).
+
+joinl(Dir, Names) ->
+    [join(Dir, Name) || Name <- Names].
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).
@@ -148,7 +152,7 @@ head([Path|Tail], Order) ->
         false ->
             case file:list_dir(Path) of
                 {ok, [_|_] = Paths} ->
-                    head([filename:join(Path, F) || F <- Order(Paths)] ++ Tail, Order);
+                    head(joinl(Path, Order(Paths)) ++ Tail, Order);
                 _ ->
                     head(Tail, Order)
             end
@@ -170,7 +174,7 @@ rmrf(Path) ->
             ok = case file:list_dir(Path) of
                      {ok, Paths} ->
                          lists:foldl(fun (P, ok) ->
-                                             rmrf(filename:join(Path, P))
+                                             rmrf(join(Path, P))
                                      end, ok, Paths)
                  end,
             file:del_dir(Path)
