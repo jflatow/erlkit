@@ -33,7 +33,9 @@
          rstrip/2,
          strip/2,
          lower/1,
-         upper/1]).
+         upper/1,
+         startswith/2,
+         endswith/2]).
 
 atom(Any) ->
     atom(Any, false).
@@ -273,3 +275,42 @@ upper(Bin) when is_binary(Bin) ->
     unicode:characters_to_binary(upper(unicode:characters_to_list(Bin)));
 upper(Str) ->
     string:to_upper(Str).
+
+startswith(<<Prefix, _/binary>>, Prefix) when is_integer(Prefix) ->
+    true;
+startswith(Bin, Prefix) when is_binary(Bin) ->
+    P = bin(Prefix),
+    N = size(P),
+    case Bin of
+        <<P:N/binary, _/binary>> ->
+            true;
+        _ ->
+            false
+    end;
+startswith([Prefix|_], Prefix) ->
+    true;
+startswith(List, Prefix) when is_list(List) ->
+    lists:prefix(list(Prefix), List);
+startswith(_, _) ->
+    false.
+
+endswith(Bin, Suffix) when is_binary(Bin), is_integer(Suffix) ->
+    binary:last(Bin) =:= Suffix orelse endswith(Bin, bin(Suffix));
+endswith(Bin, Suffix) when is_binary(Bin) ->
+    S = bin(Suffix),
+    N = size(Bin) - size(S),
+    case Bin of
+        <<_:N/binary, S/binary>> ->
+            true;
+        _ ->
+            false
+    end;
+endswith(List, Suffix) when is_list(List) ->
+    case lists:last(List) of
+        Suffix ->
+            true;
+        _ ->
+            lists:suffix(list(Suffix), List)
+    end;
+endswith(_, _) ->
+    false.
