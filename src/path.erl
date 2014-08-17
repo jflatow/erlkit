@@ -10,6 +10,7 @@
          foldlines/4,
          lines/1,
          lines/2,
+         join/2,
          head/1,
          head/2,
          last/1,
@@ -127,6 +128,9 @@ lines(Path) ->
 
 lines(Path, Opts) ->
     lists:reverse(foldlines(Path, fun (Line, Acc) -> [Line|Acc] end, [], Opts)).
+
+join(Dir, Names) ->
+    [filename:join(Dir, Name) || Name <- Names].
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).
