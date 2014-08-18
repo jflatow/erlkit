@@ -12,6 +12,8 @@
          lines/2,
          join/2,
          joinl/2,
+         test/2,
+         test/3,
          head/1,
          head/2,
          last/1,
@@ -19,6 +21,8 @@
          rmrf/1,
          write/2,
          write/3]).
+
+-include_lib("kernel/include/file.hrl").
 
 foldl(Tree, Fun, Acc) ->
     foldl(Tree, Fun, Acc, {undefined, undefined}).
@@ -135,6 +139,23 @@ join(Dir, Name) ->
 
 joinl(Dir, Names) ->
     [join(Dir, Name) || Name <- Names].
+
+test(Path, Opts) ->
+    case file:read_file_info(Path) of
+        {ok, Info} ->
+            test(Path, Info, Opts);
+        _ ->
+            false
+    end.
+
+test(Path, Info, List) when is_list(List) ->
+    lists:all(fun (X) -> test(Path, Info, X) end, List);
+test(_, #file_info{type=Type}, directory) ->
+    Type =:= directory;
+test(_, #file_info{type=Type}, regular) ->
+    Type =:= regular;
+test(_, #file_info{mode=Mode}, executable) ->
+    Mode band 8#00111 > 0.
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).
