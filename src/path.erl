@@ -19,6 +19,7 @@
          last/1,
          last/2,
          rmrf/1,
+         mkdir/1,
          write/2,
          write/3]).
 
@@ -200,6 +201,9 @@ rmrf(Path) ->
                  end,
             file:del_dir(Path)
     end.
+
+mkdir(Path) ->
+    filelib:ensure_dir(join(Path, sentinel)).
 
 write(Path, Dump) ->
     write(Path, Dump, []).
