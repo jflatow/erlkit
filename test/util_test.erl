@@ -7,6 +7,7 @@
                flt/1,
                int/1,
                num/1,
+               disfix/2,
                startswith/2,
                endswith/2]).
 
@@ -55,6 +56,14 @@ num_test() ->
     ?assertMatch(123, num("123")),
     ?assertMatch(123, num(<<"123">>)),
     ?assertMatch(123, num(123)).
+
+disfix_test() ->
+    ?assertMatch("def", disfix("abc", "abcdef")),
+    ?assertMatch("def", disfix(<<"abc">>, "abcdef")),
+    ?assertMatch("abcdef", disfix("aabc", "abcdef")),
+    ?assertMatch(<<"def">>, disfix("abc", <<"abcdef">>)),
+    ?assertMatch(<<"def">>, disfix(<<"abc">>, <<"abcdef">>)),
+    ?assertMatch(<<"abcdef">>, disfix("aabc", <<"abcdef">>)).
 
 startswith_test() ->
     ?assertMatch(true, startswith(<<"abc">>, <<>>)),

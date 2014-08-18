@@ -222,16 +222,14 @@ snap(Data, Sep) ->
             {<<>>, <<>>}
     end.
 
-disfix(Prefix, Str) when is_list(Str), is_binary(Prefix) ->
-    disfix(binary_to_list(Prefix), Str);
 disfix(Prefix, Str) when is_list(Str) ->
-    Str -- Prefix;
+    list(disfix(Prefix, bin(Str)));
 disfix(Prefix, Bin) when is_binary(Bin), is_list(Prefix) ->
-    disfix(list_to_binary(Prefix), Bin);
+    disfix(bin(Prefix), Bin);
 disfix(Prefix, Bin) when is_binary(Bin) ->
     Size = size(Prefix),
     case Bin of
-        <<Prefix:Size/bits, Rest/bits>> ->
+        <<Prefix:Size/binary, Rest/binary>> ->
             Rest;
         _ ->
             Bin
