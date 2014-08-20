@@ -18,6 +18,7 @@
          head/2,
          last/1,
          last/2,
+         list/1,
          rmrf/1,
          mkdir/1,
          write/2,
@@ -185,6 +186,15 @@ last(Tree) ->
 
 last(Tree, Order) ->
     head(Tree, fun (L) -> lists:reverse(Order(L)) end).
+
+
+list(Path) ->
+    case file:list_dir(Path) of
+        {ok, Filenames} ->
+            Filenames;
+        {error, enoent} ->
+            []
+    end.
 
 rmrf(Path) ->
     case file:delete(Path) of
