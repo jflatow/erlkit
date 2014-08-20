@@ -19,6 +19,16 @@
          since/3,
          marker/3]).
 
+-export([int_to_path/2,
+         int_to_path/3,
+         path_to_int/2,
+         path_to_int/3,
+         id_to_str/1,
+         id_to_str/2,
+         str_to_id/1,
+         tag/1,
+         untag/1]).
+
 -behavior(gen_server).
 -export([init/1,
          handle_call/3,
@@ -186,6 +196,33 @@ path_to_int(Path, Depth, Base) ->
     element(2, lists:foldl(fun (B, {Pow, Int}) ->
                                    {Pow div Unit, Int + list_to_integer(B, Base) * Pow}
                            end, {num:pow(Unit, Depth - 1), 0}, filename:split(Path))).
+
+id_to_str(Id) ->
+    id_to_str(Id, "+").
+
+id_to_str(undefined, Inf) ->
+    Inf;
+id_to_str({Rel, Offs}, _) ->
+    util:format("~s:~25.36.0B", [util:replace(Rel, $/, $.), Offs]).
+
+str_to_id(Str) when is_list(Str) ->
+    str_to_id(util:bin(Str));
+str_to_id(Bin) when size(Bin) =:= 1 ->
+    undefined;
+str_to_id(Bin) ->
+    case binary:split(Bin, <<":">>) of
+        [Rel, Offs] ->
+            {util:replace(str(Rel), $., $/), list_to_integer(str(Offs), 36)}
+    end.
+
+tag({A, B}) ->
+    util:format("~s-~s", [id_to_str(A), id_to_str(B, "=")]).
+
+untag(Tag) ->
+    case binary:split(util:bin(Tag), <<"-">>) of
+        [A, B] ->
+            {str_to_id(A), str_to_id(B)}
+    end.
 
 rel(Root, Path) ->
     util:strip(util:disfix(str(Root), str(Path)), $/).

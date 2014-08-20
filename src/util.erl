@@ -29,11 +29,13 @@
          join/3,
          snap/2,
          disfix/2,
+         format/2,
          lstrip/2,
          rstrip/2,
          strip/2,
          lower/1,
          upper/1,
+         replace/3,
          startswith/2,
          endswith/2]).
 
@@ -235,6 +237,9 @@ disfix(Prefix, Bin) when is_binary(Bin) ->
             Bin
     end.
 
+format(Format, Args) ->
+    lists:flatten(io_lib:format(Format, Args)).
+
 lstrip([C|Rest], C) ->
     lstrip(Rest, C);
 lstrip(<<C, Rest/bits>>, C) ->
@@ -273,6 +278,11 @@ upper(Bin) when is_binary(Bin) ->
     unicode:characters_to_binary(upper(unicode:characters_to_list(Bin)));
 upper(Str) ->
     string:to_upper(Str).
+
+replace(Str, Pat, Sub) when is_list(Str) ->
+    [case C of Pat -> Sub; _ -> C end || C <- Str];
+replace(Bin, Pat, Sub) when is_binary(Bin) ->
+    << <<(case C of Pat -> Sub; _ -> C end)>> || <<C>> <= Bin >>.
 
 startswith(<<Prefix, _/binary>>, Prefix) when is_integer(Prefix) ->
     true;
