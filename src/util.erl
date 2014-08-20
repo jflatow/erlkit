@@ -3,6 +3,7 @@
 -export([atom/1,
          atom/2,
          list/1,
+         str/1,
          bin/1,
          flt/1,
          int/1,
@@ -36,6 +37,7 @@
          lower/1,
          upper/1,
          replace/3,
+         contains/2,
          startswith/2,
          endswith/2]).
 
@@ -59,6 +61,9 @@ list(Flt) when is_float(Flt) ->
     float_to_list(Flt);
 list(Int) when is_integer(Int) ->
     integer_to_list(Int).
+
+str(Str) ->
+    format("~s", [Str]).
 
 bin(Bin) when is_binary(Bin) ->
     Bin;
@@ -279,10 +284,25 @@ upper(Bin) when is_binary(Bin) ->
 upper(Str) ->
     string:to_upper(Str).
 
+replace(Str, Pat, Sub) when is_list(Pat); is_binary(Pat) ->
+    re:replace(Str, Pat, Sub, [global]);
 replace(Str, Pat, Sub) when is_list(Str) ->
     [case C of Pat -> Sub; _ -> C end || C <- Str];
 replace(Bin, Pat, Sub) when is_binary(Bin) ->
     << <<(case C of Pat -> Sub; _ -> C end)>> || <<C>> <= Bin >>.
+
+contains(Str, Pat) when is_list(Pat); is_binary(Pat) ->
+    re:run(Str, Pat) =/= nomatch;
+contains([Pat|_], Pat) ->
+    true;
+contains([_|Rest], Pat) ->
+    contains(Rest, Pat);
+contains(<<Pat, _/binary>>, Pat) ->
+    true;
+contains(<<_, Rest/binary>>, Pat) ->
+    contains(Rest, Pat);
+contains(_, _) ->
+    false.
 
 startswith(<<Prefix, _/binary>>, Prefix) when is_integer(Prefix) ->
     true;

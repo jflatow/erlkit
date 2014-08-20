@@ -8,6 +8,7 @@
                int/1,
                num/1,
                disfix/2,
+               contains/2,
                startswith/2,
                endswith/2]).
 
@@ -64,6 +65,47 @@ disfix_test() ->
     ?assertMatch(<<"def">>, disfix("abc", <<"abcdef">>)),
     ?assertMatch(<<"def">>, disfix(<<"abc">>, <<"abcdef">>)),
     ?assertMatch(<<"abcdef">>, disfix("aabc", <<"abcdef">>)).
+
+contains_test() ->
+    ?assertMatch(true, contains(<<"abc">>, $b)),
+    ?assertMatch(true, contains(<<"abc">>, "b")),
+    ?assertMatch(true, contains(<<"abc">>, <<"b">>)),
+    ?assertMatch(true, contains(<<"abc">>, "bc")),
+    ?assertMatch(true, contains(<<"abc">>, <<"bc">>)),
+    ?assertMatch(true, contains(<<"abc">>, "abc")),
+    ?assertMatch(true, contains(<<"abc">>, <<"abc">>)),
+    ?assertMatch(true, contains(<<"abc">>, <<>>)),
+    ?assertMatch(true, contains(<<"abc">>, "")),
+    ?assertMatch(true, contains(<<>>, <<>>)),
+    ?assertMatch(true, contains(<<>>, "")),
+    ?assertMatch(true, contains("abc", $b)),
+    ?assertMatch(true, contains("abc", "b")),
+    ?assertMatch(true, contains("abc", <<"b">>)),
+    ?assertMatch(true, contains("abc", "bc")),
+    ?assertMatch(true, contains("abc", <<"bc">>)),
+    ?assertMatch(true, contains("abc", "abc")),
+    ?assertMatch(true, contains("abc", <<"abc">>)),
+    ?assertMatch(true, contains("abc", <<>>)),
+    ?assertMatch(true, contains("abc", "")),
+    ?assertMatch(true, contains("", <<>>)),
+    ?assertMatch(true, contains("", "")),
+    ?assertMatch(false, contains(<<"abc">>, $d)),
+    ?assertMatch(false, contains(<<"abc">>, "d")),
+    ?assertMatch(false, contains(<<"abc">>, <<"d">>)),
+    ?assertMatch(false, contains(<<"abc">>, "abcd")),
+    ?assertMatch(false, contains(<<"abc">>, <<"abcd">>)),
+    ?assertMatch(false, contains("abc", $d)),
+    ?assertMatch(false, contains("abc", "d")),
+    ?assertMatch(false, contains("abc", <<"d">>)),
+    ?assertMatch(false, contains("abc", "abcd")),
+    ?assertMatch(false, contains("abc", <<"abcd">>)),
+    ?assertMatch(false, contains(<<>>, $a)),
+    ?assertMatch(false, contains(<<>>, "a")),
+    ?assertMatch(false, contains(<<>>, <<"a">>)),
+    ?assertMatch(false, contains("", $a)),
+    ?assertMatch(false, contains("", "a")),
+    ?assertMatch(false, contains("", <<"a">>)).
+
 
 startswith_test() ->
     ?assertMatch(true, startswith(<<"abc">>, <<>>)),
