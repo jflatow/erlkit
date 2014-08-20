@@ -12,6 +12,7 @@
          lines/2,
          join/2,
          joinl/2,
+         safe/1,
          test/2,
          test/3,
          head/1,
@@ -19,6 +20,8 @@
          last/1,
          last/2,
          list/1,
+         read/1,
+         read/2,
          rmrf/1,
          mkdir/1,
          write/2,
@@ -142,6 +145,13 @@ join(Dir, Name) ->
 joinl(Dir, Names) ->
     [join(Dir, Name) || Name <- Names].
 
+safe(<<>>) ->
+    true;
+safe(Path) when is_binary(Path) ->
+    [P || <<C, _/bits>> = P <- filename:split(Path), C =:= $. orelse C =:= $/] =:= [];
+safe(Path) ->
+    safe(util:bin(Path)).
+
 test(Path, Opts) ->
     case file:read_file_info(Path) of
         {ok, Info} ->
@@ -194,6 +204,17 @@ list(Path) ->
             Filenames;
         {error, enoent} ->
             []
+    end.
+
+read(Path) ->
+    read(Path, undefined).
+
+read(Path, Default) ->
+    case file:read_file(Path) of
+        {ok, Data} ->
+            Data;
+        {error, enoent} ->
+            Default
     end.
 
 rmrf(Path) ->
