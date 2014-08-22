@@ -13,6 +13,7 @@
          foldl/3,
          foldl/4,
          foldl/5,
+         fetch/2,
          range/2,
          range/3,
          since/2,
@@ -103,6 +104,9 @@ foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
                                end, Acc, Range)
             end
     end.
+
+fetch(Log, {Rel, Offs}) ->
+    hd(range(Log, {{Rel, Offs}, {Rel, Offs + 1}})).
 
 range(Log, Range) ->
     range(Log, Range, []).
