@@ -139,6 +139,9 @@ decode(Data) when is_binary(Data) ->
 decode(Data) when is_list(Data) ->
     decode(list_to_binary(Data)).
 
+encode(Params) when is_map(Params) ->
+    encode(maps:to_list(Params));
+
 encode([{K, V}|[_|_] = Rest]) ->
     [escape(K), $=, escape(V), $&|encode(Rest)];
 encode([{K, V}]) ->
