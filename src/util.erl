@@ -131,12 +131,7 @@ get(Obj, Key) ->
     get(Obj, Key, undefined).
 
 get(Map, Key, Default) when is_map(Map) ->
-    case maps:find(Key, Map) of
-        {ok, Val} ->
-            Val;
-        error ->
-            Default
-    end;
+    maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
     proplists:get_value(Key, List, Default);
 get(Dict, Key, Default) when element(1, Dict) =:= dict -> %% NB: technically opaque
