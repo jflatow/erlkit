@@ -23,6 +23,8 @@
 -export([read_rfc3339/1,
          read_rfc3339/2]).
 
+-export([clock_distance/2]).
+
 -import(util, [int/1,
                mod/2]).
 
@@ -199,3 +201,6 @@ wknum({Y, _, _} = Date, WeekStart) ->
         Days ->
             {Y, Days div 7 + 1}
     end.
+
+clock_distance(X, Y) ->
+    min(util:mod(X - Y, 24), util:mod(Y - X, 24)).
