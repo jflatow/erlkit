@@ -22,6 +22,7 @@
          increment/3,
          update/2,
          count/3,
+         each/2,
          enum/1,
          enum/2,
          enum/3,
@@ -180,6 +181,9 @@ count(Fun, Acc, {I, N}) when I < N ->
     count(Fun, Fun(I, Acc), {I + 1, N});
 count(_, Acc, _) ->
     Acc.
+
+each(Obj, Fun) ->
+    fold(fun (I, _) -> Fun(I) end, nil, Obj).
 
 enum(List) ->
     enum(List, 0).
