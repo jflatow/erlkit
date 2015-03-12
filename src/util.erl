@@ -12,6 +12,7 @@
          hex/1,
          hexdigit/1,
          unhexdigit/1,
+         def/2,
          delete/2,
          get/2,
          get/3,
@@ -128,6 +129,19 @@ hexdigit(15) -> $F.
 unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
+
+def(undefined, Default) ->
+    Default;
+def(null, Default) ->
+    Default;
+def(nil, Default) ->
+    Default;
+def(<<>>, Default) ->
+    Default;
+def([], Default) ->
+    Default;
+def(Value, _) ->
+    Value.
 
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
