@@ -31,6 +31,7 @@
          iter/1,
          join/2,
          join/3,
+         roll/3,
          snap/2,
          disfix/2,
          format/2,
@@ -239,6 +240,18 @@ join([A, B|Rest], Sep, Skip) ->
     [A, Sep|join([B|Rest], Sep, Skip)];
 join(List, _Sep, _Skip) ->
     List.
+
+roll(Fun, Acc, [I|Rest]) ->
+    case Fun(I, Acc) of
+        {done, A} ->
+            A;
+        {continue, A} ->
+            roll(Fun, A, Rest)
+    end;
+roll(_Fun, Acc, []) ->
+    Acc;
+roll(Fun, Acc, Iterable) ->
+    roll(Fun, Acc, iter(Iterable)).
 
 snap(Data, Sep) ->
     case binary:split(Data, Sep) of
