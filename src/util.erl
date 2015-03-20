@@ -13,6 +13,8 @@
          hexdigit/1,
          unhexdigit/1,
          def/2,
+         defget/2,
+         defget/3,
          delete/2,
          get/2,
          get/3,
@@ -143,6 +145,12 @@ def([], Default) ->
     Default;
 def(Value, _) ->
     Value.
+
+defget(Maybe, Key) ->
+    defget(Maybe, Key, undefined).
+
+defget(Maybe, Key, Default) ->
+    get(def(Maybe, []), Key, Default).
 
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
