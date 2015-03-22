@@ -13,12 +13,14 @@
          hexdigit/1,
          unhexdigit/1,
          def/2,
-         defget/2,
-         defget/3,
          delete/2,
          get/2,
          get/3,
          set/3,
+         defget/2,
+         defget/3,
+         getdef/2,
+         getdef/3,
          modify/3,
          modify/4,
          increment/2,
@@ -146,12 +148,6 @@ def([], Default) ->
 def(Value, _) ->
     Value.
 
-defget(Maybe, Key) ->
-    defget(Maybe, Key, undefined).
-
-defget(Maybe, Key, Default) ->
-    get(def(Maybe, []), Key, Default).
-
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
 delete(List, Key) when is_list(List) ->
@@ -180,6 +176,18 @@ set(List, Key, Val) when is_list(List) ->
     lists:keystore(Key, 1, List, {Key, Val});
 set(Dict, Key, Val) when element(1, Dict) =:= dict -> %% NB: technically opaque
     dict:store(Key, Val, Dict).
+
+defget(Obj, Key) ->
+    defget(Obj, Key, undefined).
+
+defget(Obj, Key, Default) ->
+    def(get(Obj, Key, Default), Default).
+
+getdef(Maybe, Key) ->
+    getdef(Maybe, Key, undefined).
+
+getdef(Maybe, Key, Default) ->
+    get(def(Maybe, []), Key, Default).
 
 modify(Obj, Key, Fun) ->
     modify(Obj, Key, Fun, undefined).
