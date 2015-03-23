@@ -17,6 +17,7 @@
          parse/2,
          stamp/1,
          stamp/2,
+         wkday/1,
          wknum/1,
          wknum/2]).
 
@@ -191,10 +192,14 @@ stamp({{Y, M, D}, {H, Mi, S}}, rfc3339) ->
 stamp(Time, rfc3339) ->
     stamp(datetime(Time)).
 
+wkday(Time) ->
+    calendar:day_of_the_week(element(1, datetime(Time))).
+
 wknum(Time) ->
     wknum(Time, 1).
 
-wknum({Y, _, _} = Date, WeekStart) ->
+wknum(Time, WeekStart) ->
+    {{Y, _, _} = Date, _} = datetime(Time),
     case days({Y, 1, 4}, Date) + mod(calendar:day_of_the_week({Y, 1, 4}) - WeekStart, 7) of
         Days when Days < 0 ->
             {Y - 1, 53};
