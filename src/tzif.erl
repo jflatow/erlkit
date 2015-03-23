@@ -61,7 +61,7 @@ from_timezone(TZif, Time) ->
 parse(Data) ->
     case read_tzif(Data, {version, 0}) of
         {#tzif{version=Version}, Rest} when Version >= $2 ->
-            {R1, TZif} = read_tzif(Rest, {version, Version}),
+            {TZif, R1} = read_tzif(Rest, {version, Version}),
             {Fallback, <<>>} = read_fallback(R1, {version, Version}),
             TZif#tzif{fallback=Fallback};
         {TZif, <<>>} ->
