@@ -17,6 +17,8 @@
          get/2,
          get/3,
          set/3,
+         defmin/2,
+         defmax/2,
          defget/2,
          defget/3,
          getdef/2,
@@ -176,6 +178,12 @@ set(List, Key, Val) when is_list(List) ->
     lists:keystore(Key, 1, List, {Key, Val});
 set(Dict, Key, Val) when element(1, Dict) =:= dict -> %% NB: technically opaque
     dict:store(Key, Val, Dict).
+
+defmin(A, B) ->
+    min(def(A, B), def(B, A)).
+
+defmax(A, B) ->
+    max(def(A, B), def(B, A)).
 
 defget(Obj, Key) ->
     defget(Obj, Key, undefined).
