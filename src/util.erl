@@ -38,6 +38,7 @@
          join/2,
          join/3,
          roll/3,
+         skip/2,
          snap/2,
          disfix/2,
          format/2,
@@ -72,8 +73,10 @@ list(Flt) when is_float(Flt) ->
 list(Int) when is_integer(Int) ->
     integer_to_list(Int).
 
-str(Str) ->
-    format("~s", [Str]).
+str(Str) when is_list(Str); is_binary(Str) ->
+    format("~s", [Str]);
+str(Any) ->
+    list(Any).
 
 bin(Bin) when is_binary(Bin) ->
     Bin;
@@ -276,6 +279,11 @@ roll(_Fun, Acc, []) ->
     Acc;
 roll(Fun, Acc, Iterable) ->
     roll(Fun, Acc, iter(Iterable)).
+
+skip(N, [_|Tail]) when N > 0 ->
+    skip(N - 1, Tail);
+skip(_, Rest) ->
+    Rest.
 
 snap(Data, Sep) ->
     case binary:split(Data, Sep) of
