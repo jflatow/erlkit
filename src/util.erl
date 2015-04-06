@@ -12,11 +12,13 @@
          hex/1,
          hexdigit/1,
          unhexdigit/1,
+         ok/1,
          def/2,
          delete/2,
          get/2,
          get/3,
          set/3,
+         has/2,
          defmin/2,
          defmax/2,
          defget/2,
@@ -140,6 +142,9 @@ unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
 
+ok({ok, Value}) ->
+    Value.
+
 def(undefined, Default) ->
     Default;
 def(null, Default) ->
@@ -181,6 +186,16 @@ set(List, Key, Val) when is_list(List) ->
     lists:keystore(Key, 1, List, {Key, Val});
 set(Dict, Key, Val) when element(1, Dict) =:= dict -> %% NB: technically opaque
     dict:store(Key, Val, Dict).
+
+has(Obj, [Key|Keys]) ->
+    case get(Obj, Key) of
+        undefined ->
+            false;
+        _ ->
+            has(Obj, Keys)
+    end;
+has(_, []) ->
+    true.
 
 defmin(A, B) ->
     min(def(A, B), def(B, A)).
