@@ -32,7 +32,8 @@
          mta_default/3,
          mta_forget/1,
          mta_send/2,
-         mta_close/1]).
+         mta_close/1,
+         mta_peername/1]).
 
 -export([read_address/1,
          read_command/1,
@@ -233,8 +234,8 @@ mta_default({"DATA", _Params}, #{envelope := #{return_path := _ReturnPath,
 mta_default({"DATA", _Params}, State, _MTA) ->
     {continue, {"503", "5.5.1 MAIL and RCPT first"}, State};
 
-mta_default({data, <<".\r\n">>}, State, #mta{deliver=Deliver}) ->
-    {continue, Deliver(State), maps:without([envelope, data], State)};
+mta_default({data, <<".\r\n">>}, State, #mta{deliver=Deliver} = MTA) ->
+    {continue, Deliver(State, MTA), maps:without([envelope, data], State)};
 mta_default({data, <<".", Line/binary>>}, #{data := Data} = State, _MTA) ->
     {continue, noreply, State#{data => <<Data/binary, Line/binary>>}};
 mta_default({data, Line}, #{data := Data} = State, _MTA) ->
@@ -261,6 +262,11 @@ mta_send(Reply, #mta{socket={Module, Socket}} = MTA) ->
 
 mta_close(#mta{socket={Module, Socket}}) ->
     Module:close(Socket).
+
+mta_peername(#mta{socket={gen_tcp, Socket}}) ->
+    inet:peername(Socket);
+mta_peername(#mta{socket={ssl, Socket}}) ->
+    ssl:peername(Socket).
 
 hostname() ->
     util:ok(inet:gethostname()).

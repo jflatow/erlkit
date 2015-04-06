@@ -188,7 +188,7 @@ decode({Headers, Body}) ->
 decode("base64", Body) ->
     case catch base64:decode(skip_spaces(Body)) of
         Error when is_tuple(Error) ->
-            throw({invalid_base64, Body});
+            throw({invalid, {base64, Body}});
         Decoded ->
             Decoded
     end;
@@ -310,7 +310,7 @@ parse(header, Buffer, Line) ->
         [Field, Value] ->
             {Field, Value};
         [Invalid] ->
-            throw({invalid_header, Invalid})
+            throw({invalid, {header, Invalid}})
     end.
 
 format(HB) ->
