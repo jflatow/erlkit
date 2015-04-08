@@ -640,7 +640,7 @@ input_validation_test() ->
 inline_json_test() ->
     ?assertEqual(<<"\"iodata iodata\"">>,
                  iolist_to_binary(encode({json, [<<"\"iodata">>, " iodata\""]}))),
-    ?assertEqual(#{<<"key">>, <<"iodata iodata">>},
+    ?assertEqual(#{<<"key">> => <<"iodata iodata">>},
                  decode(encode(#{key => {json, [<<"\"iodata">>, " iodata\""]}}))),
     ok.
 
@@ -658,7 +658,7 @@ custom_decoder_test() ->
     ?assertEqual(
        #{<<"key">> => <<"value">>},
        (decoder([]))("{\"key\": \"value\"}")),
-    F = fun (#{<<"key">> => <<"value">>}) -> win end,
+    F = fun (#{<<"key">> := <<"value">>}) -> win end,
     ?assertEqual(
        win,
        (decoder([{object_hook, F}]))("{\"key\": \"value\"}")),
@@ -700,8 +700,7 @@ key_encode_test() ->
        iolist_to_binary(encode([{<<"foo">>, 1}]))),
     ?assertEqual(
        <<"{\"\\ud834\\udd20\":1}">>,
-       iolist_to_binary(
-         encode(#{[16#0001d120] -> 1}))),
+       iolist_to_binary(encode(#{[16#0001d120] => 1}))),
     ?assertEqual(
        <<"{\"1\":1}">>,
        iolist_to_binary(encode(#{1 => 1}))),
@@ -756,10 +755,8 @@ float_test() ->
     ok.
 
 handler_test() ->
-    ?assertEqual(
-       {'EXIT',{json_encode,{bad_term,{x,y}}}},
-       catch encode({x,y})),
-    F = fun ({x,y}) -> [] end,
+    ?assertEqual([<<"x">>, <<"y">>], decode(encode({x, y}))),
+    F = fun ({x, y}) -> [] end,
     ?assertEqual(
        <<"[]">>,
        iolist_to_binary((encoder([{handler, F}]))({x, y}))),

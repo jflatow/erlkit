@@ -13,6 +13,7 @@
          hexdigit/1,
          unhexdigit/1,
          ok/1,
+         ok/2,
          def/2,
          delete/2,
          get/2,
@@ -42,6 +43,8 @@
          roll/3,
          skip/2,
          snap/2,
+         substr/2,
+         substr/3,
          disfix/2,
          format/2,
          lstrip/2,
@@ -142,8 +145,13 @@ unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
 
-ok({ok, Value}) ->
-    Value.
+ok(Term) ->
+    ok(Term, undefined).
+
+ok({ok, Value}, _Default) ->
+    Value;
+ok(_, Default) ->
+    Default.
 
 def(undefined, Default) ->
     Default;
@@ -300,6 +308,10 @@ skip(N, [_|Tail]) when N > 0 ->
 skip(_, Rest) ->
     Rest.
 
+snap(Data, Pos) when is_integer(Pos), Pos < 0 ->
+    {substr(Data, 0, size(Data) + Pos), substr(Data, Pos)};
+snap(Data, Pos) when is_integer(Pos) ->
+    {substr(Data, 0, Pos), substr(Data, Pos)};
 snap(Data, Sep) ->
     case binary:split(Data, Sep) of
         [A, B] ->
@@ -309,6 +321,15 @@ snap(Data, Sep) ->
         [] ->
             {<<>>, <<>>}
     end.
+
+substr(Data, N) ->
+    substr(Data, N, size(Data)).
+
+substr(Data, N, Len) when N < 0 ->
+    substr(Data, max(0, size(Data) + N), Len);
+substr(Data, N, Len) ->
+    M = min(N, size(Data)),
+    binary:part(Data, M, min(max(-M, Len), size(Data) - M)).
 
 disfix(Prefix, Str) when is_list(Str) ->
     list(disfix(Prefix, bin(Str)));

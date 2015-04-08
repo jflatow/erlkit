@@ -144,7 +144,7 @@ parse(_) ->
     undefined.
 
 parse(Timestamp, rfc2822) ->
-    datetime(mime:parse(datetime, Timestamp));
+    datetime(mime:parse(datetime, util:bin(Timestamp)));
 
 parse(Timestamp, rfc3339) ->
     {Time, _} = read_rfc3339(util:bin(Timestamp)),

@@ -1,6 +1,6 @@
 -module(mime).
 
-%% Basic MIME parsing (RFC 2822)
+%% Basic Internet Message / MIME parsing (RFC 2822 + 204{5,6,7})
 
 -export([fold/3,
          parse/1,
@@ -13,14 +13,35 @@
          boundary/2,
          header/2,
          header/3,
+         date/1,
+         from/1,
+         sender/1,
+         reply_to/1,
+         to/1,
+         cc/1,
+         bcc/1,
+         message_id/1,
+         in_reply_to/1,
+         references/1,
+         subject/1,
+         comments/1,
+         keywords/1,
          content_type/1,
          content_transfer_encoding/1,
          decode/1,
          decode/2,
          encode/1,
-         encode/2]).
+         encode/2,
+         decode_word/1,
+         encode_word/1]).
 
--export([skip_spaces/1,
+-export([normalize/1,
+         read/2,
+         maybe/2,
+         either/2,
+         skip_cfws/1,
+         skip_comment/1,
+         skip_spaces/1,
          wrap/2,
          wrap/3,
          wrap/4,
@@ -30,7 +51,9 @@
 -import(util, [bin/1,
                int/1,
                hexdigit/1,
-               unhexdigit/1]).
+               unhexdigit/1,
+               join/2,
+               snap/2]).
 
 -define(TAB, $\t).
 -define(SP, $\s).
@@ -38,8 +61,28 @@
 -define(LF, $\n).
 -define(CRLF, "\r\n").
 -define(Q, $\").
--define(IS_DIGIT(C), (C >= $0 andalso C =< $9)).
--define(IS_PRINTABLE(C), (C >= ?SP andalso C =< $~ andalso C =/= $=)).
+-define(IS_ALPHA(C), ((C >= $A andalso C =< $Z) orelse (C >= $a andalso C =< $z))).
+-define(IS_DIGIT(C), ((C >= $0 andalso C =< $9))).
+-define(IS_FWS(C), ((C >= 9 andalso C =< 13) orelse C =:= 32)).
+-define(IS_NO_WS_CTL(C), ((C >= 1 andalso C =< 8) orelse
+                          (C >= 11 andalso C =< 12) orelse
+                          (C >= 14 andalso C =< 31) orelse C =:= 127)).
+-define(IS_PRINTABLE(C), ((C >= ?SP andalso C =< $~ andalso C =/= $=))).
+
+-define(IS_ATEXT(C), (?IS_ALPHA(C) orelse ?IS_DIGIT(C) orelse
+                      C =:= $! orelse C =:= $# orelse
+                      C =:= $$ orelse C =:= $% orelse
+                      C =:= $& orelse C =:= $' orelse
+                      C =:= $* orelse C =:= $+ orelse
+                      C =:= $- orelse C =:= $/ orelse
+                      C =:= $= orelse C =:= $? orelse
+                      C =:= $^ orelse C =:= $_ orelse
+                      C =:= $` orelse C =:= ${ orelse
+                      C =:= $| orelse C =:= $} orelse
+                      C =:= $~)).
+-define(IS_DTEXT(C), (?IS_NO_WS_CTL(C) orelse
+                      (C >= $! andalso C =< $Z) orelse
+                      (C >= $^ andalso C =< $~))).
 
 normalize(Name) when is_atom(Name) ->
     normalize(atom_to_list(Name));
@@ -48,22 +91,132 @@ normalize(Name) when is_binary(Name) ->
 normalize(Name) ->
     string:to_lower(Name).
 
-read_quoted(<<?Q, Rest/binary>>) ->
-    read_quoted(Rest, <<>>).
+read_atext(<<C, Rest/binary>>, Acc) when ?IS_ATEXT(C) ->
+    read_atext(Rest, <<Acc/binary, C>>);
+read_atext(Rest, Acc) ->
+    {Acc, Rest}.
 
-read_quoted(<<?Q, Rest/binary>>, Acc) ->
-    [Acc, Rest];
-read_quoted(<<$\\, C, Rest/binary>>, Acc) ->
-    read_quoted(Rest, <<Acc/binary, C>>);
-read_quoted(<<C, Rest/binary>>, Acc) ->
-    read_quoted(Rest, <<Acc/binary, C>>).
+read_dot_atext(<<C, Rest/binary>>, Acc) when ?IS_ATEXT(C) orelse C =:= $. ->
+    read_dot_atext(Rest, <<Acc/binary, C>>);
+read_dot_atext(Rest, Acc) ->
+    {Acc, Rest}.
+
+read_comment(<<$(, Rest/binary>>) ->
+    read_comment(Rest, <<>>).
+
+read_comment(<<$), Rest/binary>>, Acc) ->
+    {Acc, Rest};
+read_comment(<<C, Rest/binary>>, Acc) ->
+    read_comment(Rest, <<Acc/binary, C>>).
+
+read_quoted_string(<<?Q, Rest/binary>>) ->
+    read_quoted_string(Rest, <<>>).
+
+read_quoted_string(<<?Q, Rest/binary>>, Acc) ->
+    {Acc, Rest};
+read_quoted_string(<<$\\, C, Rest/binary>>, Acc) ->
+    read_quoted_string(Rest, <<Acc/binary, C>>);
+read_quoted_string(<<C, Rest/binary>>, Acc) ->
+    read_quoted_string(Rest, <<Acc/binary, C>>).
+
+read_angle_addr(<<$<, Rest/binary>>) ->
+    read_angle_addr(Rest, <<>>).
+
+read_angle_addr(<<$>, Rest/binary>>, Acc) ->
+    {Addr, <<>>} = read(addr_spec, Acc),
+    {Addr, Rest};
+read_angle_addr(<<C, Rest/binary>>, Acc) ->
+    read_angle_addr(Rest, <<Acc/binary, C>>).
+
+read_domain_literal(<<$[, Rest/binary>>) ->
+    read_domain_literal(Rest, <<>>).
+
+read_domain_literal(<<$], Rest/binary>>, Acc) ->
+    {Acc, Rest};
+read_domain_literal(<<$\\, C, Rest/binary>>, Acc) ->
+    read_domain_literal(Rest, <<Acc/binary, C>>);
+read_domain_literal(<<C, Rest/binary>>, Acc) when ?IS_DTEXT(C); ?IS_FWS(C) ->
+    read_domain_literal(Rest, <<Acc/binary, C>>).
+
+read(atom, Data) ->
+    case read_atext(skip_cfws(Data), <<>>) of
+        {Atom, R0} when Atom =/= <<>> ->
+            {Atom, skip_cfws(R0)}
+    end;
+
+read(dot_atom, Data) ->
+    case read_dot_atext(skip_cfws(Data), <<>>) of
+        {Atom, R0} when Atom =/= <<>> ->
+            {Atom, skip_cfws(R0)}
+    end;
+
+read(word, Data) ->
+    either([atom, quoted_string], Data);
+
+read(phrase, Data) ->
+    repeat(word, Data, {1, infinity});
+
+read(comment, Data) ->
+    read_comment(Data);
+
+read(quoted_string, Data) ->
+    read_quoted_string(Data);
+
+read(address, Data) ->
+    either([mailbox, group], Data, true);
+
+read(mailbox, Data) ->
+    case either([name_addr, addr_spec], Data, true) of
+        {{name_addr, NameAddr}, Rest} ->
+            {NameAddr, Rest};
+        {{addr_spec, Addr}, Rest} ->
+            {{undefined, Addr}, Rest}
+    end;
+
+read(name_addr, Data) ->
+    {Name, R0} = maybe(display_name, Data),
+    {Addr, R1} = read(angle_addr, R0),
+    {{Name, Addr}, R1};
+
+read(angle_addr, Data) ->
+    {Addr, R0} = read_angle_addr(skip_cfws(Data)),
+    {Addr, skip_cfws(R0)};
+
+read(group, Data) ->
+    {Name, <<$:, R0/binary>>} = read(display_name, Data),
+    {List, <<$;, R1/binary>>} = maybe({list, mailbox}, skip_cfws(R0), []),
+    {{Name, List}, skip_cfws(R1)};
+
+read(display_name, Data) ->
+    read(phrase, Data);
+
+read(addr_spec, Data) ->
+    {LocalPart, <<$@, R0/binary>>} = read(local_part, Data),
+    {Domain, R1} = read(domain, R0),
+    {{LocalPart, Domain}, R1};
+
+read(local_part, Data) ->
+    either([dot_atom, quoted_string], Data);
+
+read(domain, Data) ->
+    either([dot_atom, domain_literal], Data);
+
+read(domain_literal, Data) ->
+    {DomainLiteral, R0} = read_domain_literal(skip_cfws(Data)),
+    {DomainLiteral, skip_cfws(R0)};
+
+read(msg_id, Data) ->
+    read(angle_addr, Data); %% close enough
+
+read(msg_ids, Data) ->
+    repeat(msg_id, Data, {1, infinity});
 
 read(datetime, Timestamp) ->
     {_DoW, R0} = read(dow, skip_spaces(Timestamp)),
     {Date, R1} = read(date, skip_spaces(R0)),
     {Time, R2} = read(time, skip_spaces(R1)),
     {Offs, R3} = read(offs, skip_spaces(R2)),
-    {{{Date, Time}, Offs}, R3};
+    {{{Date, Time}, Offs}, skip_cfws(R3)};
 
 read(dow, <<DoW:3/binary, ",", Rest/binary>>) ->
     {DoW, Rest};
@@ -106,13 +259,46 @@ read(time, <<H:2/binary, ":", Mi:2/binary, ":", S:2/binary, Rest/binary>>) ->
 read(offs, <<"+", H:2/binary, Mi:2/binary, Rest/binary>>) ->
     {[{-int(H), hours}, {-int(Mi), minutes}], Rest};
 read(offs, <<"-", H:2/binary, Mi:2/binary, Rest/binary>>) ->
-    {[{int(H), hours}, {int(Mi), minutes}], Rest}.
+    {[{int(H), hours}, {int(Mi), minutes}], Rest};
 
-skip_spaces(<<C, Rest/binary>>) when C >= 9, C =< 13; C =:= 32 ->
+read({list, Symbol}, Data) ->
+    {Head, R0} = read(Symbol, Data),
+    {Tail, R1} = repeat({comma, Symbol}, R0),
+    {[Head|Tail], R1};
+
+read({comma, Symbol}, <<$,, Data/binary>>) ->
+    read(Symbol, Data).
+
+maybe(Symbol, Data) ->
+    maybe(Symbol, Data, undefined).
+
+maybe(Symbol, Data, Default) ->
+    abnf:maybe(fun read/2, Symbol, Data, Default).
+
+repeat(Symbol, Data) ->
+    repeat(Symbol, Data, {0, infinity}).
+
+repeat(Symbol, Data, Bounds) ->
+    abnf:repeat(fun read/2, Symbol, Data, Bounds).
+
+either(Symbols, Data) ->
+    either(Symbols, Data, false).
+
+either(Symbols, Data, Tagged) ->
+    abnf:either(fun read/2, Symbols, Data, Tagged).
+
+skip_cfws(Data) ->
+    skip_spaces(skip_comment(skip_spaces(Data))).
+
+skip_comment(<<$(, _/binary>> = Data) ->
+    element(2, read(comment, Data));
+skip_comment(Data) ->
+    Data.
+
+skip_spaces(<<C, Rest/binary>>) when ?IS_FWS(C) ->
     skip_spaces(Rest);
 skip_spaces(Binary) ->
     Binary.
-
 
 wrap(Data, Every) ->
     wrap(Data, Every, <<?CRLF>>).
@@ -134,7 +320,7 @@ boundary(Headers) ->
 
 boundary(Headers, Default) ->
     case content_type(Headers) of
-        {<<"multipart/",  _/binary>>, Params} ->
+        {"multipart/" ++ _, Params} ->
             proplists:get_value("boundary", Params, Default);
         {_Type, _Params} ->
             error
@@ -156,6 +342,45 @@ header([{Field, Value}|Headers], Name, Default, norm) ->
 header([], _, Default, norm) ->
     Default.
 
+date(Headers) ->
+    parse(datetime, header(Headers, "date")).
+
+from(Headers) ->
+    parse({list, mailbox}, header(Headers, "from")).
+
+sender(Headers) ->
+    parse(mailbox, header(Headers, "sender", <<>>), undefined).
+
+reply_to(Headers) ->
+    parse({list, address}, header(Headers, "reply-to", <<>>), []).
+
+to(Headers) ->
+    parse({list, address}, header(Headers, "to", <<>>), []).
+
+cc(Headers) ->
+    parse({list, address}, header(Headers, "cc", <<>>), []).
+
+bcc(Headers) ->
+    parse({list, address}, header(Headers, "bcc", <<>>), []).
+
+message_id(Headers) ->
+    parse(msg_id, header(Headers, "message-id", <<>>), undefined).
+
+in_reply_to(Headers) ->
+    parse(msg_ids, header(Headers, "in-reply-to", <<>>), []).
+
+references(Headers) ->
+    parse(msg_ids, header(Headers, "in-reply-to", <<>>), []).
+
+subject(Headers) ->
+    skip_spaces(header(Headers, "subject", <<>>)).
+
+comments(Headers) ->
+    skip_spaces(header(Headers, "comments", <<>>)).
+
+keywords(Headers) ->
+    parse({list, phrase}, header(Headers, "keywords", <<>>), []).
+
 content_type(Headers) ->
     content_type(header(Headers, "content-type"), undefined, []).
 
@@ -163,7 +388,7 @@ content_type(undefined, undefined, []) ->
     {"text/plain", []};
 content_type(Raw, undefined, Params) ->
     [Type|Rest] = binary:split(skip_spaces(Raw), <<";">>),
-    content_type(Rest, Type, Params);
+    content_type(Rest, normalize(Type), Params);
 content_type([], Type, Params) ->
     {Type, Params};
 content_type([Param], Type, Params) ->
@@ -171,7 +396,7 @@ content_type([Param], Type, Params) ->
         [<<>>] ->
             content_type([], Type, Params);
         [Attribute, <<?Q, _/binary>> = Rest0] ->
-            [Value,Rest1] = read_quoted(Rest0),
+            {Value,Rest1} = read_quoted_string(Rest0),
             [_Xtra|Rest2] = binary:split(Rest1, <<";">>),
             content_type(Rest2, Type, [{normalize(Attribute), Value}|Params]);
         [Attribute, Rest0] ->
@@ -237,6 +462,21 @@ encode("quoted-printable", <<C, Body/binary>>, Acc, N) ->
 encode("quoted-printable", <<>>, Acc, _) ->
     Acc.
 
+decode_word(<<"=?", Rest/binary>> = Word) ->
+    {_CharSet, R0} = snap(Rest, <<"?">>), %%
+    {Encoding, R1} = snap(R0, <<"?">>),
+    case snap(R1, -2) of
+        {Encoded, <<"?=">>} when Encoding =:= <<"B">> ->
+            decode("base64", Encoded);
+        {Encoded, <<"?=">>} when Encoding =:= <<"Q">> ->
+            decode("quoted-printable", Encoded); %% not quite
+        _ ->
+            Word
+    end.
+
+encode_word(Word) ->
+    <<"=?utf-8?B?", (base64:encode(Word))/binary, "?=">>.
+
 split_headers(Message) ->
     split_headers(Message, []).
 
@@ -244,17 +484,17 @@ split_headers(Message, Headers) ->
     split_headers(Message, Headers, <<>>).
 
 split_headers(Message, Headers, Buffer) ->
-    case binary:split(Message, <<?CRLF>>) of
-        [<<>>, Body] when Headers =:= [] ->
+    case snap(Message, <<?CRLF>>) of
+        {<<>>, Body} when Headers =:= [] ->
             {[], Body};
-        [Line, <<>>] ->
-            {lists:reverse([parse(header, Buffer, Line)|Headers]), <<>>};
-        [Line, <<?CRLF, Body/binary>>] ->
-            {lists:reverse([parse(header, Buffer, Line)|Headers]), Body};
-        [Line, <<Space, Rest/binary>>] when Space =:= 9; Space =:= 32 ->
+        {Line, <<>>} ->
+            {lists:reverse([parse_header(Buffer, Line)|Headers]), <<>>};
+        {Line, <<?CRLF, Body/binary>>} ->
+            {lists:reverse([parse_header(Buffer, Line)|Headers]), Body};
+        {Line, <<Space, Rest/binary>>} when Space =:= 9; Space =:= 32 ->
             split_headers(Rest, Headers, <<Buffer/binary, Line/binary, ?CRLF, Space>>);
-        [Line, Rest] ->
-            split_headers(Rest, [parse(header, Buffer, Line)|Headers])
+        {Line, Rest} ->
+            split_headers(Rest, [parse_header(Buffer, Line)|Headers])
     end.
 
 split_parts({Headers, Body}) ->
@@ -295,17 +535,28 @@ parse(Message) ->
              {Preamble, [parse(Part) || Part <- Parts], Epilogue, Boundary};
          <<_/binary>> ->
              case content_type(Headers) of
-                 {<<"text/", _/binary>>, _Params} ->
+                 {"text/" ++ _, _Params} ->
                      decode({Headers, Body});
                  {_Type, _Params} ->
                      Body
              end
      end}.
 
-parse(datetime, Timestamp) ->
-    element(1, read(datetime, bin(Timestamp))).
+parse(Symbol, Data) ->
+    try read(Symbol, Data) of
+        {Value, <<>>} ->
+            Value;
+        _ ->
+            throw({invalid, {Symbol, Data}})
+    catch
+        _:_ ->
+            throw({invalid, {Symbol, Data}})
+    end.
 
-parse(header, Buffer, Line) ->
+parse(Symbol, Data, Default) ->
+    element(1, maybe(Symbol, Data, Default)).
+
+parse_header(Buffer, Line) ->
     case binary:split(<<Buffer/binary, Line/binary>>, <<":">>) of
         [Field, Value] ->
             {Field, Value};
@@ -330,6 +581,55 @@ format(body, {Headers, Parts}) when is_list(Parts) ->
     format(body, {Headers, {<<>>, Parts, <<>>, boundary(Headers)}});
 format(body, HB) ->
     iolist_to_binary(encode(HB));
+
+format({list, Symbol}, List) ->
+    bin(join([format(Symbol, I) || I <- List], $,));
+
+format(mailbox, {undefined, Addr}) ->
+    format(addr_spec, Addr);
+format(mailbox, {Name, Addr}) ->
+    <<(format(display_name, Name))/binary, " ", (format(angle_addr, Addr))/binary>>;
+
+format(display_name, Name) when is_list(Name) ->
+    bin(join(Name, " "));
+format(display_name, Name) ->
+    bin(Name);
+
+format(angle_addr, Addr) ->
+    <<$<, (format(addr_spec, Addr))/binary, $>>>;
+
+format(addr_spec, {LocalPart, Domain}) ->
+    <<(format(local_part, LocalPart))/binary, $@, (format(domain, Domain))/binary>>;
+format(addr_spec, Addr) ->
+    bin(Addr);
+
+format(local_part, LocalPart) ->
+    case maybe(dot_atom, LocalPart) of
+        {LocalPart, <<>>} ->
+            LocalPart;
+        _ ->
+            format(quoted_string, LocalPart)
+    end;
+
+format(domain, Domain) ->
+    case maybe(dot_atom, Domain) of
+        {Domain, <<>>} ->
+            Domain;
+        _ ->
+            format(domain_literal, Domain)
+    end;
+
+format(quoted_string, Data) ->
+    <<$", (<< <<(case ?IS_DTEXT(C) of
+                     true -> <<C>>;
+                     false  -> <<$\\, C>>
+                 end)/binary>> || <<C>> <= Data >>)/binary, $">>;
+
+format(domain_literal, Data) ->
+    <<$[, (<< <<(case ?IS_DTEXT(C) of
+                     true -> <<C>>;
+                     false  -> <<$\\, C>>
+                 end)/binary>> || <<C>> <= Data >>)/binary, $]>>;
 
 format(datetime, {{D, T}, O}) ->
     <<(format(date, D))/binary, " ", (format(time, T))/binary, " ", (format(offs, O))/binary>>;
