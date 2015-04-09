@@ -590,7 +590,7 @@ format(mailbox, {undefined, Addr}) ->
 format(mailbox, {Name, Addr}) ->
     <<(format(display_name, Name))/binary, " ", (format(angle_addr, Addr))/binary>>;
 
-format(display_name, Name) when is_list(Name) ->
+format(display_name, [C|_] = Name) when not is_integer(C) ->
     bin(join(Name, " "));
 format(display_name, Name) ->
     bin(Name);
