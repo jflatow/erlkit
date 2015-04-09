@@ -28,6 +28,8 @@
          keywords/1,
          content_type/1,
          content_transfer_encoding/1,
+         find_type/2,
+         find_text/1,
          decode/1,
          decode/2,
          encode/1,
@@ -406,6 +408,28 @@ content_type([Param], Type, Params) ->
 
 content_transfer_encoding(Headers) ->
     normalize(skip_spaces(header(Headers, "content-transfer-encoding", "7bit"))).
+
+find_type(Type, {Headers, Body}) ->
+    case content_type(Headers) of
+        {Type, _Params} ->
+            Body;
+        _ ->
+            find_type(Type, Body)
+    end;
+find_type(Type, {Preamble, [Part|Parts], Epilogue, Boundary}) ->
+    case find_type(Type, Part) of
+        undefined ->
+            find_type(Type, {Preamble, Parts, Epilogue, Boundary});
+        Found ->
+            Found
+    end;
+find_type("text/plain", <<Body/binary>>) ->
+    Body;
+find_type(_Type, _) ->
+    undefined.
+
+find_text(Body) ->
+    find_type("text/plain", Body).
 
 decode({Headers, Body}) ->
     decode(content_transfer_encoding(Headers), Body).
