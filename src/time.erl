@@ -104,6 +104,8 @@ seconds({N, seconds}) ->
     N * ?Second;
 seconds(Seconds) when is_number(Seconds) ->
     Seconds;
+seconds({{D, T}, O}) when is_list(O) ->
+    seconds(pass({D, T}, O));
 seconds({Y, M, D} = Date) when is_number(Y), is_number(M), is_number(D) ->
     seconds({Date, {0, 0, 0}});
 seconds({D, {H, M, S}}) when is_float(S) ->
