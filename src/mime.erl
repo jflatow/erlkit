@@ -423,8 +423,6 @@ find_type(Type, {Preamble, [Part|Parts], Epilogue, Boundary}) ->
         Found ->
             Found
     end;
-find_type("text/plain", <<Body/binary>>) ->
-    Body;
 find_type(_Type, _) ->
     undefined.
 
