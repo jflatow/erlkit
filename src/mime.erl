@@ -631,6 +631,9 @@ format(domain_literal, Data) ->
                      false  -> <<$\\, C>>
                  end)/binary>> || <<C>> <= Data >>)/binary, $]>>;
 
+format(msg_id, MessageId) ->
+    format(angle_addr, MessageId); %% close enough
+
 format(datetime, {{D, T}, O}) ->
     <<(format(date, D))/binary, " ", (format(time, T))/binary, " ", (format(offs, O))/binary>>;
 format(datetime, {D, T}) ->
