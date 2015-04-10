@@ -317,23 +317,25 @@ wrap(Data, Every, Break, Final, Acc) when size(Data) > Every ->
 wrap(Data, _, _, Final, Acc) ->
     <<Acc/binary, Data/binary, Final/binary>>.
 
-boundary(Headers) ->
-    boundary(Headers, error).
+boundary(Headerish) ->
+    boundary(Headerish, error).
 
-boundary(Headers, Default) ->
-    case content_type(Headers) of
+boundary(Headerish, Default) ->
+    case content_type(Headerish) of
         {"multipart/" ++ _, Params} ->
             proplists:get_value("boundary", Params, Default);
         {_Type, _Params} ->
             error
     end.
 
-header(Headers, Name) ->
-    header(Headers, Name, undefined).
+header(Headerish, Name) ->
+    header(Headerish, Name, undefined).
 
-header(Headers, Name, Default) ->
-    header(Headers, normalize(Name), Default, norm).
+header(Headerish, Name, Default) ->
+    header(Headerish, normalize(Name), Default, norm).
 
+header({Headers, _Body}, Name, Default, Switch) ->
+    header(Headers, Name, Default, Switch);
 header([{Field, Value}|Headers], Name, Default, norm) ->
     case normalize(Field) of
         Name ->
@@ -344,47 +346,47 @@ header([{Field, Value}|Headers], Name, Default, norm) ->
 header([], _, Default, norm) ->
     Default.
 
-date(Headers) ->
-    parse(datetime, header(Headers, "date")).
+date(Headerish) ->
+    parse(datetime, header(Headerish, "date")).
 
-from(Headers) ->
-    parse({list, mailbox}, header(Headers, "from")).
+from(Headerish) ->
+    parse({list, mailbox}, header(Headerish, "from")).
 
-sender(Headers) ->
-    parse(mailbox, header(Headers, "sender", <<>>), undefined).
+sender(Headerish) ->
+    parse(mailbox, header(Headerish, "sender", <<>>), undefined).
 
-reply_to(Headers) ->
-    parse({list, address}, header(Headers, "reply-to", <<>>), []).
+reply_to(Headerish) ->
+    parse({list, address}, header(Headerish, "reply-to", <<>>), []).
 
-to(Headers) ->
-    parse({list, address}, header(Headers, "to", <<>>), []).
+to(Headerish) ->
+    parse({list, address}, header(Headerish, "to", <<>>), []).
 
-cc(Headers) ->
-    parse({list, address}, header(Headers, "cc", <<>>), []).
+cc(Headerish) ->
+    parse({list, address}, header(Headerish, "cc", <<>>), []).
 
-bcc(Headers) ->
-    parse({list, address}, header(Headers, "bcc", <<>>), []).
+bcc(Headerish) ->
+    parse({list, address}, header(Headerish, "bcc", <<>>), []).
 
-message_id(Headers) ->
-    parse(msg_id, header(Headers, "message-id", <<>>), undefined).
+message_id(Headerish) ->
+    parse(msg_id, header(Headerish, "message-id", <<>>), undefined).
 
-in_reply_to(Headers) ->
-    parse(msg_ids, header(Headers, "in-reply-to", <<>>), []).
+in_reply_to(Headerish) ->
+    parse(msg_ids, header(Headerish, "in-reply-to", <<>>), []).
 
-references(Headers) ->
-    parse(msg_ids, header(Headers, "in-reply-to", <<>>), []).
+references(Headerish) ->
+    parse(msg_ids, header(Headerish, "in-reply-to", <<>>), []).
 
-subject(Headers) ->
-    skip_spaces(header(Headers, "subject", <<>>)).
+subject(Headerish) ->
+    skip_spaces(header(Headerish, "subject", <<>>)).
 
-comments(Headers) ->
-    skip_spaces(header(Headers, "comments", <<>>)).
+comments(Headerish) ->
+    skip_spaces(header(Headerish, "comments", <<>>)).
 
-keywords(Headers) ->
-    parse({list, phrase}, header(Headers, "keywords", <<>>), []).
+keywords(Headerish) ->
+    parse({list, phrase}, header(Headerish, "keywords", <<>>), []).
 
-content_type(Headers) ->
-    content_type(header(Headers, "content-type"), undefined, []).
+content_type(Headerish) ->
+    content_type(header(Headerish, "content-type"), undefined, []).
 
 content_type(undefined, undefined, []) ->
     {"text/plain", []};
@@ -406,8 +408,8 @@ content_type([Param], Type, Params) ->
             content_type(Rest1, Type, [{normalize(Attribute), Value}|Params])
     end.
 
-content_transfer_encoding(Headers) ->
-    normalize(skip_spaces(header(Headers, "content-transfer-encoding", "7bit"))).
+content_transfer_encoding(Headerish) ->
+    normalize(skip_spaces(header(Headerish, "content-transfer-encoding", "7bit"))).
 
 find_type(Type, {Headers, Body}) ->
     case content_type(Headers) of
