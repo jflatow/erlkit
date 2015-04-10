@@ -1,6 +1,6 @@
 -module(mime).
 
-%% Basic Internet Message / MIME parsing (RFC 2822 + 204{5,6,7})
+%% Basic Internet Message / MIME parsing (RFC 5322 + 204{5,6,7})
 
 -export([fold/3,
          parse/1,
@@ -268,7 +268,12 @@ read({list, Symbol}, Data) ->
     {Tail, R1} = repeat({comma, Symbol}, R0),
     {[Head|Tail], R1};
 
-read({comma, Symbol}, <<$,, Data/binary>>) ->
+read({tokens, Symbol}, Data) ->
+    {Head, R0} = read(Symbol, Data),
+    {Tail, R1} = repeat(Symbol, R0),
+    {[Head|Tail], R1};
+
+read({comma, Symbol}, <<",", Data/binary>>) ->
     read(Symbol, Data).
 
 maybe(Symbol, Data) ->
@@ -371,10 +376,10 @@ message_id(Headerish) ->
     parse(msg_id, header(Headerish, "message-id", <<>>), undefined).
 
 in_reply_to(Headerish) ->
-    parse(msg_ids, header(Headerish, "in-reply-to", <<>>), []).
+    parse({tokens, msg_id}, header(Headerish, "in-reply-to", <<>>), []).
 
 references(Headerish) ->
-    parse(msg_ids, header(Headerish, "in-reply-to", <<>>), []).
+    parse({tokens, msg_id}, header(Headerish, "references", <<>>), []).
 
 subject(Headerish) ->
     skip_spaces(header(Headerish, "subject", <<>>)).
@@ -383,7 +388,7 @@ comments(Headerish) ->
     skip_spaces(header(Headerish, "comments", <<>>)).
 
 keywords(Headerish) ->
-    parse({list, phrase}, header(Headerish, "keywords", <<>>), []).
+    parse({tokens, msg_id}, header(Headerish, "keywords", <<>>), []).
 
 content_type(Headerish) ->
     content_type(header(Headerish, "content-type"), undefined, []).
@@ -607,7 +612,10 @@ format(body, HB) ->
     iolist_to_binary(encode(HB));
 
 format({list, Symbol}, List) ->
-    bin(join([format(Symbol, I) || I <- List], $,));
+    bin(join([format(Symbol, I) || I <- List], ","));
+
+format({tokens, Symbol}, List) ->
+    bin(join([format(Symbol, I) || I <- List], " "));
 
 format(mailbox, {undefined, Addr}) ->
     format(addr_spec, Addr);
