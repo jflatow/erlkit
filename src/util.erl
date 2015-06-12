@@ -43,6 +43,7 @@
          roll/3,
          skip/2,
          snap/2,
+         split/2,
          substr/2,
          substr/3,
          disfix/2,
@@ -321,6 +322,22 @@ snap(Data, Sep) ->
         [] ->
             {<<>>, <<>>}
     end.
+
+split(Data, Sep) when is_binary(Data), is_integer(Sep) ->
+    binary:split(Data, <<Sep>>, [global]);
+split(Data, Seps) when is_binary(Data), is_list(Seps) ->
+    binary:split(Data, [case Sep of
+                            S when is_binary(S) ->
+                                S;
+                            S when is_integer(S) ->
+                                <<S>>;
+                            S ->
+                                bin(S)
+                        end || Sep <- Seps], [global]);
+split(Data, Sep) when is_binary(Data) ->
+    binary:split(Data, Sep, [global]);
+split(Data, Sep) ->
+    split(bin(Data), Sep).
 
 substr(Data, N) ->
     substr(Data, N, size(Data)).
