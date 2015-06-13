@@ -323,6 +323,8 @@ snap(Data, Sep) ->
             {<<>>, <<>>}
     end.
 
+split(<<>>, _) ->
+    [];
 split(Data, Sep) when is_binary(Data), is_integer(Sep) ->
     binary:split(Data, <<Sep>>, [global]);
 split(Data, Seps) when is_binary(Data), is_list(Seps) ->
