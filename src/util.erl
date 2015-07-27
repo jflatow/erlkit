@@ -243,12 +243,14 @@ lookup(Obj, Key) ->
     lookup(Obj, [Key]).
 
 modify(Obj, Path, Fun) ->
-    modify(Obj, Path, Fun, []).
+    modify(Obj, Path, Fun, #{}).
 
 modify(Obj, [], _, _) ->
     Obj;
-modify(Obj, [Key], Fun, Empty) ->
+modify(Obj, [Key], Fun, Empty) when is_function(Fun) ->
     setdef(Obj, Key, Fun(getdef(Obj, Key)), Empty);
+modify(Obj, [Key], Val, Empty) ->
+    setdef(Obj, Key, Val, Empty);
 modify(Obj, [Key|Path], Fun, Empty) ->
     setdef(Obj, Key, modify(getdef(Obj, Key), Path, Fun, Empty), Empty);
 modify(Obj, Key, Fun, Empty) ->
