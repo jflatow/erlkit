@@ -26,8 +26,13 @@
          defget/3,
          getdef/2,
          getdef/3,
+         setdef/3,
+         setdef/4,
+         lookup/2,
          modify/3,
          modify/4,
+         mutate/3,
+         mutate/4,
          increment/2,
          increment/3,
          update/2,
@@ -224,17 +229,42 @@ getdef(Maybe, Key) ->
 getdef(Maybe, Key, Default) ->
     get(def(Maybe, []), Key, Default).
 
-modify(Obj, Key, Fun) ->
-    modify(Obj, Key, Fun, undefined).
+setdef(Maybe, Key, Val) ->
+    setdef(Maybe, Key, Val, []).
 
-modify(Obj, Key, Fun, Initial) ->
+setdef(Maybe, Key, Val, Empty) ->
+    set(def(Maybe, Empty), Key, Val).
+
+lookup(Obj, Path) when is_list(Path) ->
+    lists:foldl(fun (Key, Acc) ->
+                        getdef(Acc, Key)
+                end, Obj, Path);
+lookup(Obj, Key) ->
+    lookup(Obj, [Key]).
+
+modify(Obj, Path, Fun) ->
+    modify(Obj, Path, Fun, []).
+
+modify(Obj, [], _, _) ->
+    Obj;
+modify(Obj, [Key], Fun, Empty) ->
+    setdef(Obj, Key, Fun(getdef(Obj, Key)), Empty);
+modify(Obj, [Key|Path], Fun, Empty) ->
+    setdef(Obj, Key, modify(getdef(Obj, Key), Path, Fun, Empty), Empty);
+modify(Obj, Key, Fun, Empty) ->
+    modify(Obj, [Key], Fun, Empty).
+
+mutate(Obj, Key, Fun) ->
+    mutate(Obj, Key, Fun, undefined).
+
+mutate(Obj, Key, Fun, Initial) ->
     set(Obj, Key, Fun(get(Obj, Key, Initial))).
 
 increment(Obj, Key) ->
     increment(Obj, Key, 1).
 
 increment(Obj, Key, Num) ->
-    modify(Obj, Key, fun (V) -> V + Num end, 0).
+    mutate(Obj, Key, fun (V) -> V + Num end, 0).
 
 update(Old, New) when is_map(Old), is_map(New) ->
     maps:merge(Old, New);
