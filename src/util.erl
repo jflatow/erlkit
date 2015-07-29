@@ -20,6 +20,7 @@
          get/3,
          set/3,
          has/2,
+         map/2,
          defmin/2,
          defmax/2,
          defget/2,
@@ -175,9 +176,7 @@ def(Value, _) ->
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
 delete(List, Key) when is_list(List) ->
-    proplists:delete(Key, List);
-delete(Dict, Key) when element(1, Dict) =:= dict -> %% NB: technically opaque
-    dict:erase(Key, Dict).
+    proplists:delete(Key, List).
 
 get(Obj, Key) ->
     get(Obj, Key, undefined).
@@ -185,21 +184,12 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    proplists:get_value(Key, List, Default);
-get(Dict, Key, Default) when element(1, Dict) =:= dict -> %% NB: technically opaque
-    case dict:find(Key, Dict) of
-        {ok, Val} ->
-            Val;
-        error ->
-            Default
-    end.
+    proplists:get_value(Key, List, Default).
 
 set(Map, Key, Val) when is_map(Map) ->
     maps:put(Key, Val, Map);
 set(List, Key, Val) when is_list(List) ->
-    lists:keystore(Key, 1, List, {Key, Val});
-set(Dict, Key, Val) when element(1, Dict) =:= dict -> %% NB: technically opaque
-    dict:store(Key, Val, Dict).
+    lists:keystore(Key, 1, List, {Key, Val}).
 
 has(Obj, [Key|Keys]) ->
     case get(Obj, Key) of
@@ -210,6 +200,13 @@ has(Obj, [Key|Keys]) ->
     end;
 has(_, []) ->
     true.
+
+map(Map, Fun) when is_map(Map) ->
+    maps:fold(fun (Key, Val, Acc) ->
+                      Acc#{Key => Fun(Val)}
+              end, #{}, Map);
+map(List, Fun) ->
+    lists:map(Fun, List).
 
 defmin(A, B) ->
     min(def(A, B), def(B, A)).
@@ -299,16 +296,12 @@ enum(Fun, Acc, List) ->
 fold(Fun, Acc, Map) when is_map(Map) ->
     maps:fold(fun (K, V, A) -> Fun({K, V}, A) end, Acc, Map);
 fold(Fun, Acc, List) when is_list(List) ->
-    lists:foldl(Fun, Acc, List);
-fold(Fun, Acc, Dict) when element(1, Dict) =:= dict -> %% NB: technically opaque
-    dict:fold(Fun, Acc, Dict).
+    lists:foldl(Fun, Acc, List).
 
 iter(Map) when is_map(Map) ->
     maps:to_list(Map);
 iter(List) when is_list(List) ->
-    List;
-iter(Dict) when element(1, Dict) =:= dict -> %% NB: technically opaque
-    dict:to_list(Dict).
+    List.
 
 join([A, B|Rest], Sep) ->
     [A, Sep|join([B|Rest], Sep)];
