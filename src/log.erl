@@ -13,6 +13,7 @@
          foldl/3,
          foldl/4,
          foldl/5,
+         limit/5,
          fetch/2,
          range/2,
          range/3,
@@ -40,7 +41,7 @@
 
 -define(Magic, "logfile:").
 -define(OZero, 42).
--record(state, {root, path, file, offs, ckpt, depth, limit}).
+-record(state, {root, path, file, offs, ckpt, depth, chunk}).
 
 %% external
 
@@ -88,7 +89,7 @@ foldl(Log, Fun, Acc, Range) ->
     foldl(Log, Fun, Acc, Range, []).
 
 foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
-    Mode = proplists:get_value(mode, Opts, safe),
+    Mode = util:get(Opts, mode, safe),
     case gen_server:call(Log, state) of
         #state{root=Root, path=Path, offs=Offs} = S ->
             Lower = {PLo, _} = lower(S, I1),
@@ -105,6 +106,19 @@ foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
             end
     end.
 
+limit(Log, Fun, Acc, Range, Opts) ->
+    case util:get(Opts, limit) of
+        undefined ->
+            foldl(Log, Fun, Acc, Range, Opts);
+        Limit ->
+            element(2, foldl(Log,
+                             fun (I, {N, A}) when N < Limit ->
+                                     {N + 1, Fun(I, A)};
+                                 (_, {N, A}) ->
+                                     {stop, {N, A}}
+                             end, {0, Acc}, Range, Opts))
+    end.
+
 fetch(Log, {Rel, Offs}) ->
     hd(range(Log, {{Rel, Offs}, {Rel, Offs + 1}})).
 
@@ -112,7 +126,7 @@ range(Log, Range) ->
     range(Log, Range, []).
 
 range(Log, Range, Opts) ->
-    foldl(Log, fun (Item, Acc) -> [Item|Acc] end, [], Range, Opts).
+    limit(Log, fun (Item, Acc) -> [Item|Acc] end, [], Range, Opts).
 
 since(Log, Id) ->
     since(Log, Id, []).
@@ -129,8 +143,8 @@ marker(Log, Fun, IO) ->
 %% gen_server
 
 init([Root, Opts]) ->
-    Depth = proplists:get_value(depth, Opts, 2),
-    Limit = proplists:get_value(limit, Opts, 8 bsl 20),
+    Depth = util:get(Opts, depth, 2),
+    Chunk = util:get(Opts, chunk, 8 bsl 20),
     Last = last(Root, Depth),
     Path = rel(Root, Last),
     case file(Last) of
@@ -139,7 +153,7 @@ init([Root, Opts]) ->
                                    path=Path,
                                    file=File,
                                    depth=Depth,
-                                   limit=Limit}) of
+                                   chunk=Chunk}) of
                 {ok, State} ->
                     {ok, State};
                 Error ->
@@ -324,6 +338,8 @@ foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, rash) ->
 foldpath({Abs, Rel}, Fun, Acc, Range, _) ->
     foldpath({Abs, Rel}, Fun, Acc, Range, ?OZero).
 
+foldentries(_, _, _, {stop, Acc}, _) ->
+    {stop, Acc};
 foldentries(_, Id, _, Acc, {_, Upper}) when Id >= Upper ->
     {stop, Acc};
 foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range) ->
@@ -402,7 +418,7 @@ do(verify, #state{file=File} = State) ->
             end
     end;
 
-do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, limit=L} = State) when O >= L ->
+do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = State) when O >= C ->
     Path = str(int_to_path(path_to_int(P, D) + 1, D)),
     case file:close(F) of
         ok ->
