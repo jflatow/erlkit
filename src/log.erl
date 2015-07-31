@@ -80,7 +80,12 @@ bendl(Log, Fun, Acc, Range) ->
     bendl(Log, Fun, Acc, Range, []).
 
 bendl(Log, Fun, Acc, {I1, _} = Range, Opts) ->
-    foldl(Log, fun ({M, _} = T, {_, A}) -> {M, Fun(T, A)} end, {{I1, I1}, Acc}, Range, Opts).
+    foldl(Log,
+          fun ({_, _}, {M, {stop, A}}) ->
+                  {stop, {M, A}};
+              ({M, _} = T, {_, A}) ->
+                  {M, Fun(T, A)}
+          end, {{I1, I1}, Acc}, Range, Opts).
 
 foldl(Log, Fun, Acc) ->
     foldl(Log, Fun, Acc, {undefined, undefined}).
