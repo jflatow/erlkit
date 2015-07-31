@@ -24,7 +24,10 @@
 -export([read_rfc3339/1,
          read_rfc3339/2]).
 
--export([clock_distance/2,
+-export([clock_distance/2]).
+-export([timer/0,
+         timer_elapsed/1,
+         timer_remaining/2,
          timeout_remaining/2]).
 
 -import(util, [int/1,
@@ -212,6 +215,15 @@ wknum(Time, WeekStart) ->
 
 clock_distance(X, Y) ->
     min(util:mod(X - Y, 24), util:mod(Y - X, 24)).
+
+timer() ->
+    erlang:system_time(milli_seconds).
+
+timer_elapsed(Start) ->
+    timer() - Start.
+
+timer_remaining(Timeout, Start) ->
+    timeout_remaining(Timeout, timer_elapsed(Start)).
 
 timeout_remaining(infinity, _Elapsed) ->
     infinity;
