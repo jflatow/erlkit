@@ -24,7 +24,8 @@
 -export([read_rfc3339/1,
          read_rfc3339/2]).
 
--export([clock_distance/2]).
+-export([clock_distance/2,
+         timeout_remaining/2]).
 
 -import(util, [int/1,
                mod/2]).
@@ -211,3 +212,8 @@ wknum(Time, WeekStart) ->
 
 clock_distance(X, Y) ->
     min(util:mod(X - Y, 24), util:mod(Y - X, 24)).
+
+timeout_remaining(infinity, _Elapsed) ->
+    infinity;
+timeout_remaining(Timeout, Elapsed) ->
+    max(Timeout - Elapsed, 0).
