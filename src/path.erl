@@ -125,7 +125,7 @@ foldlines(File, Fun, Acc, Opts) ->
     Trim = proplists:get_value(trim, Opts),
     case file:read_line(File) of
         {ok, Line} when Trim =:= true ->
-            foldlines(File, Fun, Fun(util:rstrip(Line, $\n), Acc), Opts);
+            foldlines(File, Fun, Fun(str:rstrip(Line, $\n), Acc), Opts);
         {ok, Line} ->
             foldlines(File, Fun, Fun(Line, Acc), Opts);
         eof ->

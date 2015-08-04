@@ -272,7 +272,7 @@ hostname() ->
     util:ok(inet:gethostname()).
 
 strip_crlf(Data) ->
-    util:rstrip(util:rstrip(Data, $\n), $\r).
+    str:rstrip(str:rstrip(Data, $\n), $\r).
 
 force_crlf(Data) ->
     <<(strip_crlf(Data))/binary, $\r, $\n>>.
@@ -280,7 +280,7 @@ force_crlf(Data) ->
 read_address(<<$<, Data/binary>>) ->
     case Data of
         <<$@, Rest/binary>> ->
-            {_, R1} = util:snap(Rest, <<$:>>),
+            {_, R1} = str:snap(Rest, <<$:>>),
             read_address(R1, unquoted, <<>>);
         <<Rest/binary>> ->
             read_address(Rest, unquoted, <<>>)
@@ -295,19 +295,19 @@ read_address(<<$", Rest/binary>>, unquoted, Acc) ->
 read_address(<<$", Rest/binary>>, quoted, Acc) ->
     read_address(Rest, unquoted, Acc);
 read_address(<<$>, Rest/binary>>, unquoted, Acc) ->
-    {util:snap(Acc, <<$@>>), Rest};
+    {str:snap(Acc, <<$@>>), Rest};
 read_address(<<C, Rest/binary>>, Quoted, Acc) ->
     read_address(Rest, Quoted, <<Acc/binary, C>>);
 read_address(<<>>, _Quoted, _Acc) ->
     undefined.
 
 read_command(Packet) ->
-    {Verb, Params} = util:snap(strip_crlf(Packet), <<" ">>),
-    {util:upper(util:str(Verb)), Params}.
+    {Verb, Params} = str:snap(strip_crlf(Packet), <<" ">>),
+    {str:upper(util:str(Verb)), Params}.
 
 read_from_to(Params) ->
-    {FromTo, Rest} = util:snap(strip_crlf(Params), <<":">>),
-    {util:upper(util:str(FromTo)), read_address(Rest)}.
+    {FromTo, Rest} = str:snap(strip_crlf(Params), <<":">>),
+    {str:upper(util:str(FromTo)), read_address(Rest)}.
 
 read_data(Packet) ->
     {data, force_crlf(Packet)}.

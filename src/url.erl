@@ -15,8 +15,7 @@
          esc/1,
          enc/1]).
 
--import(util, [snap/2,
-               hexdigit/1,
+-import(util, [hexdigit/1,
                unhexdigit/1]).
 
 -define(UNRESERVED(C), ((C >= $A andalso C =< $Z) orelse
@@ -133,8 +132,8 @@ u(URL, P, Q, F) -> u(URL, [{path, P}, {query, Q}, {fragment, F}]).
 decode(<<>>) ->
     [];
 decode(Data) when is_binary(Data) ->
-    {KV, Rest} = snap(Data, <<$&>>),
-    {K, V} = snap(KV, <<$=>>),
+    {KV, Rest} = str:snap(Data, <<$&>>),
+    {K, V} = str:snap(KV, <<$=>>),
     [{unescape(K), unescape(V)}|decode(Rest)];
 decode(Data) when is_list(Data) ->
     decode(list_to_binary(Data)).

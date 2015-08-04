@@ -226,7 +226,7 @@ id_to_str(Id) ->
 id_to_str(undefined, Inf) ->
     Inf;
 id_to_str({Rel, Offs}, _) ->
-    util:format("~s:~25.36.0B", [util:replace(Rel, $/, $.), Offs]).
+    str:format("~s:~25.36.0B", [str:replace(Rel, $/, $.), Offs]).
 
 str_to_id(Str) when is_list(Str) ->
     str_to_id(util:bin(Str));
@@ -235,11 +235,11 @@ str_to_id(Bin) when size(Bin) =:= 1 ->
 str_to_id(Bin) ->
     case binary:split(Bin, <<":">>) of
         [Rel, Offs] ->
-            {util:replace(str(Rel), $., $/), list_to_integer(str(Offs), 36)}
+            {str:replace(str(Rel), $., $/), list_to_integer(str(Offs), 36)}
     end.
 
 tag({A, B}) ->
-    util:format("~s-~s", [id_to_str(A), id_to_str(B, "=")]).
+    str:format("~s-~s", [id_to_str(A), id_to_str(B, "=")]).
 
 untag(Tag) ->
     case binary:split(util:bin(Tag), <<"-">>) of
@@ -248,7 +248,7 @@ untag(Tag) ->
     end.
 
 rel(Root, Path) ->
-    util:strip(util:disfix(str(Root), str(Path)), $/).
+    str:strip(str:disfix(str(Root), str(Path)), $/).
 
 str(List) when is_list(List) ->
     List;
@@ -256,7 +256,7 @@ str(Bin) when is_binary(Bin) ->
     binary_to_list(Bin).
 
 lower(#state{root=Root}, undefined) ->
-    {str(util:disfix(Root, path:head(Root))), ?OZero};
+    {str(str:disfix(Root, path:head(Root))), ?OZero};
 lower(_, {Path, Offs}) ->
     {str(Path), Offs}.
 

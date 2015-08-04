@@ -53,9 +53,7 @@
 -import(util, [bin/1,
                int/1,
                hexdigit/1,
-               unhexdigit/1,
-               join/2,
-               snap/2]).
+               unhexdigit/1]).
 
 -define(TAB, $\t).
 -define(SP, $\s).
@@ -492,9 +490,9 @@ encode("quoted-printable", <<>>, Acc, _) ->
     Acc.
 
 decode_word(<<"=?", Rest/binary>> = Word) ->
-    {_CharSet, R0} = snap(Rest, <<"?">>), %%
-    {Encoding, R1} = snap(R0, <<"?">>),
-    case snap(R1, -2) of
+    {_CharSet, R0} = str:snap(Rest, <<"?">>), %%
+    {Encoding, R1} = str:snap(R0, <<"?">>),
+    case str:snap(R1, -2) of
         {Encoded, <<"?=">>} when Encoding =:= <<"B">> ->
             decode("base64", Encoded);
         {Encoded, <<"?=">>} when Encoding =:= <<"Q">> ->
@@ -513,7 +511,7 @@ split_headers(Message, Headers) ->
     split_headers(Message, Headers, <<>>).
 
 split_headers(Message, Headers, Buffer) ->
-    case snap(Message, <<?CRLF>>) of
+    case str:snap(Message, <<?CRLF>>) of
         {<<>>, Body} when Headers =:= [] ->
             {[], Body};
         {Line, <<>>} ->
@@ -612,10 +610,10 @@ format(body, HB) ->
     iolist_to_binary(encode(HB));
 
 format({list, Symbol}, List) ->
-    bin(join([format(Symbol, I) || I <- List], ","));
+    bin(str:join([format(Symbol, I) || I <- List], ","));
 
 format({tokens, Symbol}, List) ->
-    bin(join([format(Symbol, I) || I <- List], " "));
+    bin(str:join([format(Symbol, I) || I <- List], " "));
 
 format(mailbox, {undefined, Addr}) ->
     format(addr_spec, Addr);
@@ -623,7 +621,7 @@ format(mailbox, {Name, Addr}) ->
     <<(format(display_name, Name))/binary, " ", (format(angle_addr, Addr))/binary>>;
 
 format(display_name, [C|_] = Name) when not is_integer(C) ->
-    bin(join(Name, " "));
+    bin(str:join(Name, " "));
 format(display_name, Name) ->
     bin(Name);
 
