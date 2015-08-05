@@ -30,6 +30,7 @@
          setdef/3,
          setdef/4,
          lookup/2,
+         lookup/3,
          modify/3,
          modify/4,
          ifndef/3,
@@ -233,6 +234,9 @@ lookup(Obj, Path) when is_list(Path) ->
                 end, Obj, Path);
 lookup(Obj, Key) ->
     lookup(Obj, [Key]).
+
+lookup(Obj, Path, Default) ->
+    def(lookup(Obj, Path), Default).
 
 modify(Obj, Path, Fun) ->
     modify(Obj, Path, Fun, #{}).
