@@ -20,6 +20,7 @@
          last/1,
          last/2,
          list/1,
+         list/2,
          read/1,
          read/2,
          rmrf/1,
@@ -202,9 +203,23 @@ list(Path) ->
     case file:list_dir(Path) of
         {ok, Filenames} ->
             Filenames;
+        {error, enotdir} ->
+            [];
         {error, enoent} ->
             []
     end.
+
+list(_, 0) ->
+    [];
+list(Path, Depth) ->
+    lists:foldl(fun (P, Acc) ->
+                        case list(join(Path, P), Depth - 1) of
+                            [] ->
+                                [[P]] ++ Acc;
+                            Cs ->
+                                [[P|C] || C <- Cs] ++ Acc
+                        end
+                end, [], lists:reverse(list(Path))).
 
 read(Path) ->
     read(Path, undefined).
