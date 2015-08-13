@@ -19,6 +19,8 @@
          head/2,
          last/1,
          last/2,
+         link/2,
+         link/3,
          list/1,
          list/2,
          read/1,
@@ -123,7 +125,7 @@ foldlines(Path, Fun, Acc, Opts) when is_binary(Path); is_list(Path) ->
             Acc
     end;
 foldlines(File, Fun, Acc, Opts) ->
-    Trim = proplists:get_value(trim, Opts),
+    Trim = util:get(Opts, trim),
     case file:read_line(File) of
         {ok, Line} when Trim =:= true ->
             foldlines(File, Fun, Fun(str:rstrip(Line, $\n), Acc), Opts);
@@ -198,6 +200,22 @@ last(Tree) ->
 last(Tree, Order) ->
     head(Tree, fun (L) -> lists:reverse(Order(L)) end).
 
+link(Existing, New) ->
+    link(Existing, New, []).
+
+link(Existing, New, Opts) ->
+    Dirs = util:get(Opts, dirs, true),
+    case file:make_symlink(Existing, New) of
+        {error, enoent} when Dirs =:= true ->
+            case filelib:ensure_dir(New) of
+                ok ->
+                    file:make_symlink(Existing, New);
+                {error, Error} ->
+                    {error, {mkdir, Error}}
+            end;
+        Result ->
+            Result
+    end.
 
 list(Path) ->
     case file:list_dir(Path) of
@@ -259,8 +277,8 @@ write(Path, Dump, Opts) when is_binary(Path) ->
 write(Path, Data, Opts) when is_binary(Data); is_list(Data) ->
     write(Path, fun (Temp) -> file:write_file(Temp, Data) end, Opts);
 write(Path, Dump, Opts) when is_function(Dump) ->
-    Temp = proplists:get_value(temp, Opts, Path ++ ".p"),
-    Dirs = proplists:get_value(dirs, Opts, true),
+    Temp = util:get(Opts, temp, Path ++ ".p"),
+    Dirs = util:get(Opts, dirs, true),
     case Dump(Temp) of
         {error, enoent} when Dirs =:= true ->
             case filelib:ensure_dir(Temp) of
