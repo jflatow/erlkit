@@ -66,7 +66,7 @@ locus(Log) ->
     end.
 
 write(Log, Entry) ->
-    write(Log, Entry, cast).
+    write(Log, Entry, call).
 
 write(Log, Entry, call) ->
     gen_server:call(Log, {do, {write, Entry}});
@@ -149,7 +149,7 @@ marker(Log, Fun, IO) ->
 
 init([Root, Opts]) ->
     Depth = util:get(Opts, depth, 2),
-    Chunk = util:get(Opts, chunk, 8 bsl 20),
+    Chunk = util:get(Opts, chunk, 64 bsl 20),
     Last = last(Root, Depth),
     Path = rel(Root, Last),
     case file(Last) of
@@ -303,12 +303,19 @@ header(File) ->
             end
     end.
 
+entry(File, Offs) when is_binary(File) ->
+    case File of
+        <<Size:32, Data:Size/binary, "\n", Rest/binary>> ->
+            {Rest, Data, Offs + Size + 5};
+        _ ->
+            {error, badentry}
+    end;
 entry(File, Offs) ->
     case file:read(File, 4) of
         {ok, <<Size:32>>} ->
             case file:read(File, Size + 1) of
                 {ok, <<Data:Size/binary, "\n">>} ->
-                    {Data, Offs + Size + 5};
+                    {File, Data, Offs + Size + 5};
                 {error, Reason} ->
                     {error, {read, Reason}};
                 _ ->
@@ -321,20 +328,11 @@ entry(File, Offs) ->
     end.
 
 foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
-    case file:open(Abs, [read, raw, binary]) of
-        {ok, File} ->
-            Result = case file:position(File, Start) of
-                         {ok, Offs} ->
-                             foldentries(File, {Rel, Offs}, Fun, Acc, Range);
-                         {error, EPosition} ->
-                             {stop, {error, {position, EPosition}}}
-                     end,
-            _Maybe = case file:close(File) of
-                         ok ->
-                             Result;
-                         {error, EClose} ->
-                             {stop, {error, {close, EClose}}}
-                     end;
+    case file:read_file(Abs) of
+        {ok, <<_:Start/binary, Data/binary>>} ->
+            foldentries(Data, {Rel, Start}, Fun, Acc, Range);
+        {ok, _} ->
+            {stop, {error, {position, Start}}};
         Error ->
             {stop, Error}
     end;
@@ -353,10 +351,10 @@ foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range) ->
             Acc;
         {error, _} = Error ->
             {stop, Error};
-        {_, Next} when Id < Lower ->
-            foldentries(File, {Rel, Next}, Fun, Acc, Range);
-        {Data, Next} ->
-            foldentries(File, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range)
+        {Rest, _, Next} when Id < Lower ->
+            foldentries(Rest, {Rel, Next}, Fun, Acc, Range);
+        {Rest, Data, Next} ->
+            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range)
     end.
 
 %% internal
@@ -386,7 +384,7 @@ do({repair, Checkpoint}, #state{file=File} = State) ->
 
 do(repair, #state{file=File, offs=Offs} = State) ->
     case entry(File, Offs) of
-        {Data, Next} when is_binary(Data) ->
+        {_File, Data, Next} when is_binary(Data) ->
             do(repair, State#state{offs=Next});
         {error, badentry} ->
             case file:position(File, Offs) of
