@@ -9,6 +9,8 @@
          unix/0,
          unix/1,
          unow/0,
+         tai64/0,
+         tai64/1,
          datetime/1,
          seconds/1,
          valid/1,
@@ -83,12 +85,20 @@ unix(Time) ->
 unow() ->
     calendar:universal_time().
 
+tai64() ->
+    tai64(unow()).
+
+tai64(Time) ->
+    unix(Time) + (1 bsl 62). %% NB: time is TAI not UTC
+
 datetime(Seconds) when is_integer(Seconds) ->
     calendar:gregorian_seconds_to_datetime(Seconds);
 datetime(Seconds) when is_float(Seconds) ->
     datetime(trunc(Seconds));
 datetime({unix, Seconds}) ->
     datetime(Seconds + ?UnixEpoch);
+datetime({tai64, TAI64}) ->
+    datetime({unix, TAI64 - (1 bsl 62)}); %% NB: returns TAI not UTC
 datetime({{D, T}, O}) when is_list(O) ->
     pass({D, T}, O);
 datetime({_, _, _} = Now) ->
@@ -154,7 +164,12 @@ parse(Timestamp, rfc2822) ->
 
 parse(Timestamp, rfc3339) ->
     {Time, _} = read_rfc3339(util:bin(Timestamp)),
-    datetime(Time).
+    datetime(Time);
+
+parse(<<TAI64:8/big-unsigned-unit:8>>, tai64) ->
+    datetime({tai64, TAI64});
+parse(Timestamp, tai64) ->
+    parse(util:unhex(util:bin(Timestamp)), tai64).
 
 read_digits(<<C, Rest/binary>>, Acc) when C >= $0, C =< $9 ->
     read_digits(Rest, <<Acc/binary, C>>);
@@ -196,7 +211,10 @@ stamp(Time, rfc2822) ->
 stamp({{Y, M, D}, {H, Mi, S}}, rfc3339) ->
     list_to_binary(io_lib:format("~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ", [Y, M, D, H, Mi, S]));
 stamp(Time, rfc3339) ->
-    stamp(datetime(Time)).
+    stamp(datetime(Time));
+
+stamp(Time, tai64) ->
+    util:hex(<<(tai64(Time)):8/big-unsigned-unit:8>>).
 
 wkday(Time) ->
     calendar:day_of_the_week(element(1, datetime(Time))).

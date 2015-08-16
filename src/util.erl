@@ -10,6 +10,7 @@
          num/1,
          mod/2,
          hex/1,
+         unhex/1,
          hexdigit/1,
          unhexdigit/1,
          ok/1,
@@ -117,6 +118,13 @@ hex(List) when is_list(List) ->
 hex(<<Q:4, Rest/bits>>) ->
     <<(hexdigit(Q)), (hex(Rest))/bits>>;
 hex(<<>>) ->
+    <<>>.
+
+unhex(List) when is_list(List) ->
+    unhex(list_to_binary(List));
+unhex(<<H, L, Rest/bits>>) ->
+    <<(unhexdigit(H) * 16 + unhexdigit(L)), (unhex(Rest))/bits>>;
+unhex(<<>>) ->
     <<>>.
 
 hexdigit(00) -> $0;
