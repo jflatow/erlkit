@@ -1,5 +1,17 @@
 -module(log).
 
+-export_type([log/0,
+              ref/0,
+              mark/0,
+              range/0,
+              entry/0]).
+
+-opaque log() :: pid().
+-opaque ref() :: {binary(), binary()}.
+-type mark() :: ref() | undefined.
+-type range() :: {mark(), mark()}.
+-type entry() :: {range(), binary()}.
+
 -export([open/1,
          open/2,
          close/1,
@@ -15,6 +27,8 @@
          foldl/5,
          limit/5,
          fetch/2,
+         first/1,
+         first/2,
          range/2,
          range/3,
          since/2,
@@ -126,6 +140,12 @@ limit(Log, Fun, Acc, Range, Opts) ->
 
 fetch(Log, {Rel, Offs}) ->
     hd(range(Log, {{Rel, Offs}, {Rel, Offs + 1}})).
+
+first(Log) ->
+    first(Log, {undefined, undefined}).
+
+first(Log, Range) ->
+    util:head(range(Log, Range, #{limit => 1})).
 
 range(Log, Range) ->
     range(Log, Range, []).

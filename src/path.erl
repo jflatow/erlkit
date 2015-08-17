@@ -15,6 +15,10 @@
          safe/1,
          test/2,
          test/3,
+         next/1,
+         next/2,
+         prev/1,
+         prev/2,
          head/1,
          head/2,
          last/1,
@@ -171,6 +175,32 @@ test(_, #file_info{type=Type}, regular) ->
     Type =:= regular;
 test(_, #file_info{mode=Mode}, executable) ->
     Mode band 8#00111 > 0.
+
+next(Path) ->
+    next(Path, fun lists:usort/1).
+
+next(Path, Order) when is_binary(Path) ->
+    next(binary_to_list(Path), Order);
+next(Path, Order) ->
+    Parent = filename:dirname(Path),
+    Name = filename:basename(Path),
+    case file:list_dir(Parent) of
+        {ok, Paths} ->
+            case lists:dropwhile(fun (N) -> N =/= Name end, Order(Paths)) of
+                [Name, Next|_] ->
+                    join(Parent, Next);
+                _ ->
+                    undefined
+            end;
+        _ ->
+            undefined
+    end.
+
+prev(Path) ->
+    prev(Path, fun lists:usort/1).
+
+prev(Path, Order) ->
+    next(Path, fun (L) -> lists:reverse(Order(L)) end).
 
 head(Tree) ->
     head(Tree, fun lists:usort/1).

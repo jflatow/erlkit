@@ -42,6 +42,8 @@
          increment/3,
          update/2,
          count/3,
+         head/1,
+         last/1,
          each/2,
          enum/1,
          enum/2,
@@ -297,6 +299,14 @@ count(Fun, Acc, {I, N}) when I < N ->
     count(Fun, Fun(I, Acc), {I + 1, N});
 count(_, Acc, _) ->
     Acc.
+
+head([H|_]) ->
+    H;
+head([]) ->
+    undefined.
+
+last(List) ->
+    head(lists:reverse(List)).
 
 each(Obj, Fun) ->
     fold(fun (I, _) -> Fun(I) end, nil, Obj).
