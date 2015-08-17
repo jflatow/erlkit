@@ -26,7 +26,8 @@
          link/2,
          link/3,
          list/1,
-         list/2,
+         ls/1,
+         ls/2,
          read/1,
          read/2,
          rmrf/1,
@@ -248,6 +249,9 @@ link(Existing, New, Opts) ->
     end.
 
 list(Path) ->
+    joinl(Path, ls(Path)).
+
+ls(Path) ->
     case file:list_dir(Path) of
         {ok, Filenames} ->
             Filenames;
@@ -257,17 +261,17 @@ list(Path) ->
             []
     end.
 
-list(_, 0) ->
+ls(_, 0) ->
     [];
-list(Path, Depth) ->
-    lists:foldl(fun (P, Acc) ->
-                        case list(join(Path, P), Depth - 1) of
+ls(Path, Depth) ->
+    lists:foldl(fun (Name, Acc) ->
+                        case ls(join(Path, Name), Depth - 1) of
                             [] ->
-                                [[P]] ++ Acc;
+                                [[Name]] ++ Acc;
                             Cs ->
-                                [[P|C] || C <- Cs] ++ Acc
+                                [[Name|C] || C <- Cs] ++ Acc
                         end
-                end, [], lists:reverse(list(Path))).
+                end, [], lists:reverse(ls(Path))).
 
 read(Path) ->
     read(Path, undefined).
