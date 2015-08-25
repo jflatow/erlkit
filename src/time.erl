@@ -30,6 +30,7 @@
 -export([timer/0,
          timer_elapsed/1,
          timer_remaining/2,
+         timeout/1,
          timeout_remaining/2]).
 
 -import(util, [int/1,
@@ -242,6 +243,9 @@ timer_elapsed(Start) ->
 
 timer_remaining(Timeout, Start) ->
     timeout_remaining(Timeout, timer_elapsed(Start)).
+
+timeout(Time) ->
+    seconds(Time) * 1000.
 
 timeout_remaining(infinity, _Elapsed) ->
     infinity;
