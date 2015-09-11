@@ -174,7 +174,9 @@ def(Value, _) ->
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
 delete(List, Key) when is_list(List) ->
-    proplists:delete(Key, List).
+    proplists:delete(Key, List);
+delete({Mod, Obj}, Key) ->
+    Mod:delete(Obj, Key).
 
 get(Obj, Key) ->
     get(Obj, Key, undefined).
@@ -182,12 +184,16 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    proplists:get_value(Key, List, Default).
+    proplists:get_value(Key, List, Default);
+get({Mod, Obj}, Key, Default) ->
+    Mod:get(Obj, Key, Default).
 
 set(Map, Key, Val) when is_map(Map) ->
     maps:put(Key, Val, Map);
 set(List, Key, Val) when is_list(List) ->
-    lists:keystore(Key, 1, List, {Key, Val}).
+    lists:keystore(Key, 1, List, {Key, Val});
+set({Mod, Obj}, Key, Val) ->
+    Mod:set(Obj, Key, Val).
 
 has(Obj, [Key|Keys]) ->
     case get(Obj, Key) of
