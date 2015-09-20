@@ -22,6 +22,10 @@
          set/3,
          has/2,
          map/2,
+         mutate/3,
+         mutate/4,
+         increment/2,
+         increment/3,
          defmin/2,
          defmax/2,
          defget/2,
@@ -30,16 +34,16 @@
          getdef/3,
          setdef/3,
          setdef/4,
+         hasany/2,
+         hasall/2,
+         exists/2,
+         ifndef/3,
          lookup/2,
          lookup/3,
          modify/3,
          modify/4,
-         ifndef/3,
          remove/2,
-         mutate/3,
-         mutate/4,
-         increment/2,
-         increment/3,
+         replace/3,
          update/2,
          count/3,
          head/1,
@@ -195,15 +199,12 @@ set(List, Key, Val) when is_list(List) ->
 set({Mod, Obj}, Key, Val) ->
     Mod:set(Obj, Key, Val).
 
-has(Obj, [Key|Keys]) ->
-    case get(Obj, Key) of
-        undefined ->
-            false;
-        _ ->
-            has(Obj, Keys)
-    end;
-has(_, []) ->
-    true.
+has(Map, Key) when is_map(Map) ->
+    maps:is_key(Key, Map);
+has(List, Key) when is_list(List) ->
+    proplists:is_defined(Key, List);
+has({Mod, Obj}, Key) ->
+    Mod:has(Obj, Key).
 
 map(Map, Fun) when is_map(Map) ->
     maps:fold(fun (Key, Val, Acc) ->
@@ -211,6 +212,18 @@ map(Map, Fun) when is_map(Map) ->
               end, #{}, Map);
 map(List, Fun) ->
     lists:map(Fun, List).
+
+mutate(Obj, Key, Fun) ->
+    mutate(Obj, Key, Fun, undefined).
+
+mutate(Obj, Key, Fun, Initial) ->
+    set(Obj, Key, Fun(get(Obj, Key, Initial))).
+
+increment(Obj, Key) ->
+    increment(Obj, Key, 1).
+
+increment(Obj, Key, Num) ->
+    mutate(Obj, Key, fun (V) -> V + Num end, 0).
 
 defmin(A, B) ->
     min(def(A, B), def(B, A)).
@@ -235,6 +248,38 @@ setdef(Maybe, Key, Val) ->
 
 setdef(Maybe, Key, Val, Empty) ->
     set(def(Maybe, Empty), Key, Val).
+
+hasall(Obj, [Key|Keys]) ->
+    case has(Obj, Key) of
+        true ->
+            hasall(Obj, Keys);
+        false ->
+            false
+    end;
+hasall(_, []) ->
+    true.
+
+hasany(Obj, [Key|Keys]) ->
+    case has(Obj, Key) of
+        true ->
+            true;
+        false ->
+            hasany(Obj, Keys)
+    end;
+hasany(_, []) ->
+    false.
+
+exists(_, []) ->
+    true;
+exists(Obj, [Key|Path]) ->
+    case has(Obj, Key) of
+        true ->
+            exists(get(Obj, Key), Path);
+        false ->
+            false
+    end;
+exists(Obj, Key) ->
+    exists(Obj, [Key]).
 
 ifndef(Obj, Path, Default) ->
     modify(Obj, Path,
@@ -282,17 +327,13 @@ remove(Obj, [Key|Path]) ->
 remove(Obj, Key) ->
     remove(Obj, [Key]).
 
-mutate(Obj, Key, Fun) ->
-    mutate(Obj, Key, Fun, undefined).
-
-mutate(Obj, Key, Fun, Initial) ->
-    set(Obj, Key, Fun(get(Obj, Key, Initial))).
-
-increment(Obj, Key) ->
-    increment(Obj, Key, 1).
-
-increment(Obj, Key, Num) ->
-    mutate(Obj, Key, fun (V) -> V + Num end, 0).
+replace(Obj, Path, Fun) ->
+    case exists(Obj, Path) of
+        true ->
+            modify(Obj, Path, Fun);
+        false ->
+            Obj
+    end.
 
 update(Old, New) when is_map(Old), is_map(New) ->
     maps:merge(Old, New);

@@ -7,6 +7,9 @@
                flt/1,
                int/1,
                num/1,
+               has/2,
+               hasall/2,
+               hasany/2,
                modify/3,
                remove/2]).
 
@@ -55,6 +58,24 @@ num_test() ->
     ?assertMatch(123, num("123")),
     ?assertMatch(123, num(<<"123">>)),
     ?assertMatch(123, num(123)).
+
+has_test() ->
+    ?assert(has(#{x => 1}, x)),
+    ?assert(has([{x, 1}], x)),
+    ?assertNot(has(#{x => 1}, y)),
+    ?assertNot(has([{x, 1}], y)),
+    ?assert(hasall(#{x => 1, y => 2}, [x, y])),
+    ?assert(hasall([{x, 1}, {y, 2}], [x, y])),
+    ?assertNot(hasall(#{x => 1}, [x, y])),
+    ?assertNot(hasall([{x, 1}], [x, y])),
+    ?assert(hasany(#{x => 1}, [x, y])),
+    ?assert(hasany([{x, 1}], [x, y])),
+    ?assert(hasall([], [])),
+    ?assertNot(hasany([], [])),
+    ?assertNot(hasany(#{x => 1}, [])),
+    ?assert(hasall([{x, 1}], [])),
+    ?assertNot(hasall(#{}, [x])),
+    ?assertNot(hasany([], [x])).
 
 modify_test() ->
     ?assertEqual(#{x => 1}, modify(#{}, x, fun (_) -> 1 end)),

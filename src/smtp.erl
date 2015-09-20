@@ -179,7 +179,7 @@ mta_default({error, Reason}, _State, _MTA) ->
 mta_default({"STARTTLS", _Params}, _State, MTA) ->
     SSLOptions = mta_getopt(MTA, ssl_options),
     StartTLSTimeout = mta_getopt(MTA, starttls_timeout),
-    case util:has(SSLOptions, [certfile, keyfile]) of
+    case util:hasall(SSLOptions, [certfile, keyfile]) of
         true ->
             case mta_send({"220", "2.0.0 Ready"}, MTA) of
                 #mta{socket={_Module, Socket}} = NewMTA ->
