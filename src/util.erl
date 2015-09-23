@@ -54,6 +54,8 @@
          enum/3,
          fold/3,
          iter/1,
+         keys/1,
+         keys/2,
          join/2,
          join/3,
          roll/3,
@@ -380,6 +382,23 @@ iter(Map) when is_map(Map) ->
     maps:to_list(Map);
 iter(List) when is_list(List) ->
     List.
+
+keys(Map) when is_map(Map) ->
+    maps:keys(Map);
+keys(List) when is_list(List) ->
+    [element(1, Item) || Item <- List].
+
+keys(Iter, Filter) when is_function(Filter) ->
+    fold(fun (Item, Acc) ->
+                 case Filter(Item) of
+                     true ->
+                         [element(1, Item)|Acc];
+                     false ->
+                         Acc
+                 end
+         end, [], Iter);
+keys(Iter, Filter) ->
+    keys(Iter, fun ({_, V}) -> V =:= Filter end).
 
 join([A, B|Rest], Sep) ->
     [A, Sep|join([B|Rest], Sep)];
