@@ -58,6 +58,7 @@
          keys/2,
          join/2,
          join/3,
+         random/1,
          roll/3,
          skip/2]).
 
@@ -413,6 +414,11 @@ join([A, B|Rest], Sep, Skip) ->
     [A, Sep|join([B|Rest], Sep, Skip)];
 join(List, _Sep, _Skip) ->
     List.
+
+random(List) when is_list(List) ->
+    lists:nth(random:uniform(length(List)), List);
+random(Iter) ->
+    random(iter(Iter)).
 
 roll(Fun, Acc, [I|Rest]) ->
     case Fun(I, Acc) of
