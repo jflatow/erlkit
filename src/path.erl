@@ -23,15 +23,16 @@
          head/2,
          last/1,
          last/2,
+         follow/1,
          link/2,
          link/3,
          list/1,
          ls/1,
          ls/2,
+         mkdir/1,
          read/1,
          read/2,
          rmrf/1,
-         mkdir/1,
          write/2,
          write/3]).
 
@@ -231,6 +232,16 @@ last(Tree) ->
 last(Tree, Order) ->
     head(Tree, fun (L) -> lists:reverse(Order(L)) end).
 
+follow(Path) ->
+    case file:read_link_all(Path) of
+        {ok, Linked} ->
+            follow(filename:absname(Linked, filename:dirname(Path)));
+        {error, einval} ->
+            {ok, Path};
+        {error, enoent} ->
+            {error, {enoent, Path}}
+    end.
+
 link(Existing, New) ->
     link(Existing, New, []).
 
@@ -273,6 +284,9 @@ ls(Path, Depth) ->
                         end
                 end, [], lists:reverse(ls(Path))).
 
+mkdir(Path) ->
+    filelib:ensure_dir(join(Path, sentinel)).
+
 read(Path) ->
     read(Path, undefined).
 
@@ -299,9 +313,6 @@ rmrf(Path) ->
                  end,
             file:del_dir(Path)
     end.
-
-mkdir(Path) ->
-    filelib:ensure_dir(join(Path, sentinel)).
 
 write(Path, Dump) ->
     write(Path, Dump, []).
