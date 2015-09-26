@@ -19,6 +19,7 @@
          locus/1,
          write/2,
          write/3,
+         annul/2,
          bendl/3,
          bendl/4,
          bendl/5,
@@ -87,6 +88,19 @@ write(Log, Entry, call) ->
 write(Log, Entry, cast) ->
     gen_server:cast(Log, {do, {write, Entry}}).
 
+annul(Log, {Rel, Offs}) ->
+    case gen_server:call(Log, state) of
+        #state{root=Root} ->
+            case file:open(filename:join(Root, Rel), [read, write, raw, binary]) of
+                {ok, File} ->
+                    Result = strike(File, Offs),
+                    ok = file:close(File),
+                    Result;
+                {error, Reason} ->
+                    {error, {open, Reason}}
+            end
+    end.
+
 bendl(Log, Fun, Acc) ->
     bendl(Log, Fun, Acc, {undefined, undefined}).
 
@@ -108,7 +122,6 @@ foldl(Log, Fun, Acc, Range) ->
     foldl(Log, Fun, Acc, Range, []).
 
 foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
-    Mode = util:get(Opts, mode, safe),
     case gen_server:call(Log, state) of
         #state{root=Root, path=Path, offs=Offs} = S ->
             Lower = {PLo, _} = lower(S, I1),
@@ -118,9 +131,11 @@ foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
                 true ->
                     Acc;
                 false ->
+                    Rash = util:get(Opts, rash),
+                    Recoup = util:get(Opts, recoup),
                     path:foldl(Root,
                                fun (P, A) ->
-                                       foldpath({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Mode)
+                                       foldpath({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Recoup, Rash)
                                end, Acc, Range)
             end
     end.
@@ -276,7 +291,7 @@ str(Bin) when is_binary(Bin) ->
     binary_to_list(Bin).
 
 lower(#state{root=Root}, undefined) ->
-    {str(str:disfix(Root, path:head(Root))), ?OZero};
+    {rel(Root, path:head(Root)), ?OZero};
 lower(_, {Path, Offs}) ->
     {str(Path), Offs}.
 
@@ -325,8 +340,10 @@ header(File) ->
 
 entry(File, Offs) when is_binary(File) ->
     case File of
-        <<Size:32, Data:Size/binary, "\n", Rest/binary>> ->
-            {Rest, Data, Offs + Size + 5};
+        <<Size:32, Data:Size/binary, $\n, Rest/binary>> ->
+            {Rest, {ok, Data}, Offs + Size + 5};
+        <<Size:32, Data:Size/binary, $\^x, Rest/binary>> ->
+            {Rest, {nil, Data}, Offs + Size + 5};
         _ ->
             {error, badentry}
     end;
@@ -334,8 +351,10 @@ entry(File, Offs) ->
     case file:read(File, 4) of
         {ok, <<Size:32>>} ->
             case file:read(File, Size + 1) of
-                {ok, <<Data:Size/binary, "\n">>} ->
-                    {File, Data, Offs + Size + 5};
+                {ok, <<Data:Size/binary, $\n>>} ->
+                    {File, {ok, Data}, Offs + Size + 5};
+                {ok, <<Data:Size/binary, $\^x>>} ->
+                    {File, {nil, Data}, Offs + Size + 5};
                 {error, Reason} ->
                     {error, {read, Reason}};
                 _ ->
@@ -347,34 +366,62 @@ entry(File, Offs) ->
             {error, badentry}
     end.
 
-foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
+strike(File, Offs) ->
+    case file:pread(File, Offs, 4) of
+        {ok, <<Size:32>>} ->
+            case file:pread(File, Offs + 4, Size + 1) of
+                {ok, <<Data:Size/binary, $\n>>} ->
+                    case file:pwrite(File, Offs + Size + 4, <<$\^x>>) of
+                        ok ->
+                            {ok, Data};
+                        {error, Reason} ->
+                            {error, {write, Reason}}
+                    end;
+                {ok, <<Data:Size/binary, $\^x>>} ->
+                    {ok, Data};
+                {error, Reason} ->
+                    {error, {read, Reason}};
+                _ ->
+                    {error, badentry}
+            end;
+        {error, Reason} ->
+            {error, {read, Reason}};
+        _ ->
+            {error, badentry}
+    end.
+
+foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, Start) when is_integer(Start) ->
     case file:read_file(Abs) of
         {ok, <<_:Start/binary, Data/binary>>} ->
-            foldentries(Data, {Rel, Start}, Fun, Acc, Range);
+            foldentries(Data, {Rel, Start}, Fun, Acc, Range, Recoup);
         {ok, _} ->
             {stop, {error, {position, Start}}};
         Error ->
             {stop, Error}
     end;
-foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, rash) ->
-    foldpath({Abs, Rel}, Fun, Acc, Range, OLo);
-foldpath({Abs, Rel}, Fun, Acc, Range, _) ->
-    foldpath({Abs, Rel}, Fun, Acc, Range, ?OZero).
+foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, Recoup, true) ->
+    foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, OLo);
+foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, _) ->
+    foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, ?OZero).
 
-foldentries(_, _, _, {stop, Acc}, _) ->
+foldentries(_, _, _, {stop, Acc}, _, _) ->
     {stop, Acc};
-foldentries(_, Id, _, Acc, {_, Upper}) when Id >= Upper ->
+foldentries(_, Id, _, Acc, {_, Upper}, _) when Id >= Upper ->
     {stop, Acc};
-foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range) ->
+foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range, Recoup) ->
     case entry(File, Offs) of
         {error, badentry} ->
             Acc;
         {error, _} = Error ->
             {stop, Error};
         {Rest, _, Next} when Id < Lower ->
-            foldentries(Rest, {Rel, Next}, Fun, Acc, Range);
-        {Rest, Data, Next} ->
-            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range)
+            foldentries(Rest, {Rel, Next}, Fun, Acc, Range, Recoup);
+        {Rest, {nil, _}, Next} when Recoup =/= true ->
+            foldentries(Rest, {Rel, Next}, Fun, Acc, Range, Recoup);
+        {Rest, {ok, Data}, Next} when Recoup =/= true ->
+            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range, Recoup);
+        {Rest, Entry, Next} ->
+            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Entry}, Acc), Range, Recoup)
     end.
 
 %% internal
@@ -404,7 +451,7 @@ do({repair, Checkpoint}, #state{file=File} = State) ->
 
 do(repair, #state{file=File, offs=Offs} = State) ->
     case entry(File, Offs) of
-        {_File, Data, Next} when is_binary(Data) ->
+        {_File, _Data, Next} ->
             do(repair, State#state{offs=Next});
         {error, badentry} ->
             case file:position(File, Offs) of
@@ -430,9 +477,9 @@ do(verify, #state{file=File} = State) ->
             case file:pread(File, max(C0, C1) - 1, 2) of
                 {error, Reason} ->
                     {{error, {pread, Reason}}, State};
-                {ok, <<"\n">>} when C0 < C1 ->
+                {ok, <<B>>} when (B =:= $\n orelse B =:= $\^x), C0 < C1 ->
                     {ok, State#state{offs=C1, ckpt=0}};
-                {ok, <<"\n">>} ->
+                {ok, <<B>>} when (B =:= $\n orelse B =:= $\^x) ->
                     {ok, State#state{offs=C0, ckpt=1}};
                 _ when C0 < C1 ->
                     do({repair, C0}, State#state{ckpt=0});
@@ -462,7 +509,7 @@ do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = St
 do({write, Entry}, #state{file=File, path=Path, offs=Offs} = State) ->
     Size = size(Entry),
     Next = Offs + Size + 5,
-    case file:pwrite(File, Offs, <<Size:32, Entry/binary, "\n">>) of
+    case file:pwrite(File, Offs, <<Size:32, Entry/binary, $\n>>) of
         ok ->
             {{ok, {{Path, Offs}, {Path, Next}}}, State#state{offs=Next}};
         Error ->
