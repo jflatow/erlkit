@@ -7,6 +7,7 @@
          bin/1,
          flt/1,
          int/1,
+         key/1,
          num/1,
          mod/2,
          hex/1,
@@ -15,6 +16,7 @@
          unhexdigit/1,
          ok/1,
          ok/2,
+         op/2,
          def/2,
          delete/2,
          get/2,
@@ -44,8 +46,16 @@
          modify/4,
          remove/2,
          replace/3,
+         accrue/3,
+         accrue/4,
+         accrue/5,
+         except/2,
+         filter/2,
          update/2,
+         all/2,
+         any/2,
          count/3,
+         first/2,
          head/1,
          last/1,
          each/2,
@@ -59,6 +69,7 @@
          join/2,
          join/3,
          random/1,
+         reduce/3,
          roll/3,
          skip/2]).
 
@@ -108,6 +119,12 @@ int(List) when is_list(List) ->
     list_to_integer(List);
 int(Else) ->
     int(list(Else)).
+
+key(Tuple) when is_tuple(Tuple) ->
+    element(1, Tuple);
+key(Any) ->
+    Any.
+
 
 num(Num) when is_number(Num) ->
     Num;
@@ -165,6 +182,44 @@ ok({ok, Value}, _Default) ->
 ok(_, Default) ->
     Default.
 
+op(A, {'+', X}) when is_number(X) ->
+    X + def(A, 0);
+op(A, {'-', X}) when is_number(X) ->
+    def(A, 0) - X;
+op(A, {'*', X}) when is_number(X) ->
+    X * def(A, 0);
+op(A, {'/', X}) when is_number(X) ->
+    def(A, 0) / X;
+op(A, {'+', X}) when is_list(X) ->
+    ordsets:union(X, def(A, []));
+op(A, {'-', X}) when is_list(X) ->
+    def(A, []) -- X;
+op(_, {'=', X}) ->
+    X;
+op(A, {default, X}) ->
+    update(X, def(A, #{}));
+op(A, {update, X}) ->
+    update(def(A, #{}), X);
+op(A, {except, X}) ->
+    except(def(A, #{}), X);
+op(A, {append, X}) ->
+    def(A, []) ++ X;
+op(A, {prepend, X}) ->
+    X ++ def(A, []);
+op(A, {cons, H}) ->
+    [H|def(A, [])];
+op(A, {tail, H}) ->
+    case A of
+        [H|T] ->
+            T;
+        _ ->
+            A
+    end;
+op(A, {Fun, X}) when is_function(Fun) ->
+    Fun(A, X);
+op(A, {M, F, X}) ->
+    M:F(A, X).
+
 def(undefined, Default) ->
     Default;
 def(null, Default) ->
@@ -181,7 +236,7 @@ def(Value, _) ->
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
 delete(List, Key) when is_list(List) ->
-    proplists:delete(Key, List);
+    lists:filter(fun (I) -> key(I) =/= Key end, List);
 delete({Mod, Obj}, Key) ->
     Mod:delete(Obj, Key).
 
@@ -191,7 +246,7 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    proplists:get_value(Key, List, Default);
+    first(List, fun (I) -> key(I) =:= Key end, Default);
 get({Mod, Obj}, Key, Default) ->
     Mod:get(Obj, Key, Default).
 
@@ -205,7 +260,7 @@ set({Mod, Obj}, Key, Val) ->
 has(Map, Key) when is_map(Map) ->
     maps:is_key(Key, Map);
 has(List, Key) when is_list(List) ->
-    proplists:is_defined(Key, List);
+    any(List, fun (I) -> key(I) =:= Key end);
 has({Mod, Obj}, Key) ->
     Mod:has(Obj, Key).
 
@@ -338,10 +393,41 @@ replace(Obj, Path, Fun) ->
             Obj
     end.
 
+accrue(Obj, Path, Delta) ->
+    accrue(Obj, Path, Delta, fun op/2).
+
+accrue(Obj, Path, Delta, Op) ->
+    accrue(Obj, Path, Delta, Op, #{}).
+
+accrue(Obj, Path, Deltas, Op, Empty) when is_list(Deltas) ->
+    modify(Obj, Path, fun (Prior) -> reduce(Op, Prior, Deltas) end, Empty);
+accrue(Obj, Path, Delta, Op, Empty) ->
+    modify(Obj, Path, fun (Prior) -> Op(Prior, Delta) end, Empty).
+
+except(Map, Exclude) when is_map(Map) ->
+    maps:without(keys(Exclude), Map);
+except(List, Exclude) when is_list(List) ->
+    lists:filter(fun (I) -> not has(Exclude, I) end, List).
+
+filter(Map, Filter) when is_map(Map) ->
+    maps:filter(fun (K, V) -> Filter({K, V}) end, Map);
+filter(List, Filter) when is_list(List) ->
+    lists:filter(Filter, List).
+
 update(Old, New) when is_map(Old), is_map(New) ->
     maps:merge(Old, New);
 update(Old, New) ->
     fold(fun ({K, V}, A) -> set(A, K, V) end, Old, New).
+
+all(Map, Fun) when is_map(Map) ->
+    all(maps:to_list(Map), Fun);
+all(List, Fun) when is_list(List) ->
+    lists:all(Fun, List).
+
+any(Map, Fun) when is_map(Map) ->
+    any(maps:to_list(Map), Fun);
+any(List, Fun) when is_list(List) ->
+    lists:any(Fun, List).
 
 count(Fun, Acc, N) when is_number(N) ->
     count(Fun, Acc, {0, N});
@@ -349,6 +435,19 @@ count(Fun, Acc, {I, N}) when I < N ->
     count(Fun, Fun(I, Acc), {I + 1, N});
 count(_, Acc, _) ->
     Acc.
+
+first(List, Fun) ->
+    first(List, Fun, undefined).
+
+first([H|T], Fun, Default) ->
+    case Fun(H) of
+        true ->
+            H;
+        false ->
+            first(T, Fun, Default)
+    end;
+first([], _, Default) ->
+    Default.
 
 head([H|_]) ->
     H;
@@ -387,7 +486,7 @@ iter(List) when is_list(List) ->
 keys(Map) when is_map(Map) ->
     maps:keys(Map);
 keys(List) when is_list(List) ->
-    [element(1, Item) || Item <- List].
+    [key(Item) || Item <- List].
 
 keys(Iter, Filter) when is_function(Filter) ->
     fold(fun (Item, Acc) ->
@@ -419,6 +518,13 @@ random(List) when is_list(List) ->
     lists:nth(random:uniform(length(List)), List);
 random(Iter) ->
     random(iter(Iter)).
+
+reduce(Fun, Acc, Map) when is_map(Map) ->
+    maps:fold(fun (K, V, A) -> Fun(A, {K, V}) end, Acc, Map);
+reduce(Fun, Acc, [H|T]) ->
+    reduce(Fun, Fun(Acc, H), T);
+reduce(_, Acc, []) ->
+    Acc.
 
 roll(Fun, Acc, [I|Rest]) ->
     case Fun(I, Acc) of
