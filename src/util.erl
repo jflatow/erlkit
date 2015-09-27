@@ -28,6 +28,7 @@
          mutate/4,
          increment/2,
          increment/3,
+         deflike/2,
          defmin/2,
          defmax/2,
          defget/2,
@@ -64,10 +65,12 @@
          enum/3,
          fold/3,
          iter/1,
-         keys/1,
-         keys/2,
          join/2,
          join/3,
+         keys/1,
+         keys/2,
+         mapped/1,
+         mapped/2,
          random/1,
          reduce/3,
          roll/3,
@@ -183,25 +186,29 @@ ok(_, Default) ->
     Default.
 
 op(A, {'+', X}) when is_number(X) ->
-    X + def(A, 0);
+    def(A, 0) + X;
 op(A, {'-', X}) when is_number(X) ->
     def(A, 0) - X;
 op(A, {'*', X}) when is_number(X) ->
-    X * def(A, 0);
+    def(A, 0) * X;
 op(A, {'/', X}) when is_number(X) ->
     def(A, 0) / X;
-op(A, {'+', X}) when is_list(X) ->
-    ordsets:union(X, def(A, []));
-op(A, {'-', X}) when is_list(X) ->
-    def(A, []) -- X;
+op(A, {'+', X}) when is_list(X), (is_list(A) orelse A =:= undefined) ->
+    ordsets:union(def(A, []), lists:usort(X));
+op(A, {'-', X}) when is_list(X), (is_list(A) orelse A =:= undefined) ->
+    ordsets:subtract(def(A, []), lists:usort(X));
+op(A, {'+', X}) ->
+    update(def(A, #{}), X);
+op(A, {'-', X}) ->
+    except(def(A, #{}), X);
 op(_, {'=', X}) ->
     X;
-op(A, {default, X}) ->
-    update(X, def(A, #{}));
+op(A, {addnew, X}) ->
+    update(X, deflike(A, X));
 op(A, {update, X}) ->
-    update(def(A, #{}), X);
+    update(deflike(A, X), X);
 op(A, {except, X}) ->
-    except(def(A, #{}), X);
+    except(deflike(A, X), X);
 op(A, {append, X}) ->
     def(A, []) ++ X;
 op(A, {prepend, X}) ->
@@ -282,6 +289,15 @@ increment(Obj, Key) ->
 
 increment(Obj, Key, Num) ->
     mutate(Obj, Key, fun (V) -> V + Num end, 0).
+
+deflike(A, B) when is_map(B) ->
+    def(A, #{});
+deflike(A, B) when is_list(B) ->
+    def(A, []);
+deflike(A, B) when is_number(B) ->
+    def(A, 0);
+deflike(A, B) when is_binary(B) ->
+    def(A, <<>>).
 
 defmin(A, B) ->
     min(def(A, B), def(B, A)).
@@ -407,7 +423,7 @@ accrue(Obj, Path, Delta, Op, Empty) ->
 except(Map, Exclude) when is_map(Map) ->
     maps:without(keys(Exclude), Map);
 except(List, Exclude) when is_list(List) ->
-    lists:filter(fun (I) -> not has(Exclude, I) end, List).
+    lists:filter(fun (I) -> not has(Exclude, key(I)) end, List).
 
 filter(Map, Filter) when is_map(Map) ->
     maps:filter(fun (K, V) -> Filter({K, V}) end, Map);
@@ -483,6 +499,20 @@ iter(Map) when is_map(Map) ->
 iter(List) when is_list(List) ->
     List.
 
+join([A, B|Rest], Sep) ->
+    [A, Sep|join([B|Rest], Sep)];
+join(List, _Sep) ->
+    List.
+
+join([A|Rest], Sep, A) ->
+    join(Rest, Sep, A);
+join([A, B|Rest], Sep, B) ->
+    join([A|Rest], Sep, B);
+join([A, B|Rest], Sep, Skip) ->
+    [A, Sep|join([B|Rest], Sep, Skip)];
+join(List, _Sep, _Skip) ->
+    List.
+
 keys(Map) when is_map(Map) ->
     maps:keys(Map);
 keys(List) when is_list(List) ->
@@ -500,19 +530,11 @@ keys(Iter, Filter) when is_function(Filter) ->
 keys(Iter, Filter) ->
     keys(Iter, fun ({_, V}) -> V =:= Filter end).
 
-join([A, B|Rest], Sep) ->
-    [A, Sep|join([B|Rest], Sep)];
-join(List, _Sep) ->
-    List.
+mapped(Keys) ->
+    mapped(Keys, false).
 
-join([A|Rest], Sep, A) ->
-    join(Rest, Sep, A);
-join([A, B|Rest], Sep, B) ->
-    join([A|Rest], Sep, B);
-join([A, B|Rest], Sep, Skip) ->
-    [A, Sep|join([B|Rest], Sep, Skip)];
-join(List, _Sep, _Skip) ->
-    List.
+mapped(Keys, Val) ->
+    fold(fun (Key, Acc) -> Acc#{Key => Val} end, #{}, Keys).
 
 random(List) when is_list(List) ->
     lists:nth(random:uniform(length(List)), List);
