@@ -484,15 +484,17 @@ enum([H|T], N) ->
 enum([], _) ->
     [].
 
-enum(Fun, Acc, List) ->
-    element(2, lists:foldl(fun (I, {N, A}) ->
-                                   {N + 1, Fun(N, I, A)}
-                           end, {0, Acc}, List)).
+enum(Fun, Acc, Obj) ->
+    element(2, fold(fun (I, {N, A}) ->
+                            {N + 1, Fun(N, I, A)}
+                    end, {0, Acc}, Obj)).
 
 fold(Fun, Acc, Map) when is_map(Map) ->
     maps:fold(fun (K, V, A) -> Fun({K, V}, A) end, Acc, Map);
 fold(Fun, Acc, List) when is_list(List) ->
-    lists:foldl(Fun, Acc, List).
+    lists:foldl(Fun, Acc, List);
+fold(Fun, Acc, {Mod, Obj}) ->
+    Mod:fold(Fun, Acc, Obj).
 
 iter(Map) when is_map(Map) ->
     maps:to_list(Map);
