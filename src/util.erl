@@ -8,6 +8,7 @@
          flt/1,
          int/1,
          key/1,
+         val/1,
          num/1,
          mod/2,
          hex/1,
@@ -21,11 +22,14 @@
          delete/2,
          get/2,
          get/3,
+         set/2,
          set/3,
          has/2,
          map/2,
          mutate/3,
          mutate/4,
+         decrement/2,
+         decrement/3,
          increment/2,
          increment/3,
          deflike/2,
@@ -52,6 +56,7 @@
          accrue/5,
          except/2,
          filter/2,
+         select/2,
          update/2,
          all/2,
          any/2,
@@ -59,6 +64,7 @@
          first/2,
          head/1,
          last/1,
+         diff/2,
          each/2,
          enum/1,
          enum/2,
@@ -69,6 +75,8 @@
          join/3,
          keys/1,
          keys/2,
+         vals/1,
+         vals/2,
          mapped/1,
          mapped/2,
          random/1,
@@ -128,6 +136,10 @@ key(Tuple) when is_tuple(Tuple) ->
 key(Any) ->
     Any.
 
+val({_, Val}) ->
+    Val;
+val(Any) ->
+    Any.
 
 num(Num) when is_number(Num) ->
     Num;
@@ -209,6 +221,8 @@ op(A, {update, X}) ->
     update(deflike(A, X), X);
 op(A, {except, X}) ->
     except(deflike(A, X), X);
+op(A, {select, X}) ->
+    select(deflike(A, X), X);
 op(A, {append, X}) ->
     def(A, []) ++ X;
 op(A, {prepend, X}) ->
@@ -253,22 +267,32 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    first(List, fun (I) -> key(I) =:= Key end, Default);
-get({Mod, Obj}, Key, Default) ->
+    val(first(List, fun (I) -> key(I) =:= Key end, Default));
+get({Mod, Obj}, Key, Default) when is_atom(Mod) ->
     Mod:get(Obj, Key, Default).
+
+set(Obj, Item) ->
+    set(Obj, key(Item), val(Item)).
 
 set(Map, Key, Val) when is_map(Map) ->
     maps:put(Key, Val, Map);
-set(List, Key, Val) when is_list(List) ->
-    lists:keystore(Key, 1, List, {Key, Val});
-set({Mod, Obj}, Key, Val) ->
+set([H|T], Key, Val) ->
+    case key(H) of
+        Key ->
+            [{Key, Val}|T];
+        _ ->
+            [H|set(T, Key, Val)]
+    end;
+set([], Key, Val) ->
+    [{Key, Val}];
+set({Mod, Obj}, Key, Val) when is_atom(Mod) ->
     Mod:set(Obj, Key, Val).
 
 has(Map, Key) when is_map(Map) ->
     maps:is_key(Key, Map);
 has(List, Key) when is_list(List) ->
     any(List, fun (I) -> key(I) =:= Key end);
-has({Mod, Obj}, Key) ->
+has({Mod, Obj}, Key) when is_atom(Mod) ->
     Mod:has(Obj, Key).
 
 map(Map, Fun) when is_map(Map) ->
@@ -283,6 +307,12 @@ mutate(Obj, Key, Fun) ->
 
 mutate(Obj, Key, Fun, Initial) ->
     set(Obj, Key, Fun(get(Obj, Key, Initial))).
+
+decrement(Obj, Key) ->
+    decrement(Obj, Key, 1).
+
+decrement(Obj, Key, Num) ->
+    increment(Obj, Key, -Num).
 
 increment(Obj, Key) ->
     increment(Obj, Key, 1).
@@ -363,15 +393,22 @@ ifndef(Obj, Path, Default) ->
                    Defined
            end).
 
-lookup(Obj, Path) when is_list(Path) ->
-    lists:foldl(fun (Key, Acc) ->
-                        getdef(Acc, Key)
-                end, Obj, Path);
-lookup(Obj, Key) ->
-    lookup(Obj, [Key]).
+lookup(Obj, Path) ->
+    lookup(Obj, Path, undefined).
 
-lookup(Obj, Path, Default) ->
-    def(lookup(Obj, Path), Default).
+lookup(_, [], Default) ->
+    Default;
+lookup(Obj, [Key], Default) ->
+    get(Obj, Key, Default);
+lookup(Obj, [Key|Path], Default) ->
+    case get(Obj, Key) of
+        undefined ->
+            Default;
+        Val ->
+            lookup(Val, Path, Default)
+    end;
+lookup(Obj, Key, Default) ->
+    lookup(Obj, [Key], Default).
 
 modify(Obj, Path, Fun) ->
     modify(Obj, Path, Fun, #{}).
@@ -422,18 +459,30 @@ accrue(Obj, Path, Delta, Op, Empty) ->
 
 except(Map, Exclude) when is_map(Map) ->
     maps:without(keys(Exclude), Map);
-except(List, Exclude) when is_list(List) ->
-    lists:filter(fun (I) -> not has(Exclude, key(I)) end, List).
+except(Obj, Exclude) ->
+    reduce(fun delete/2, Obj, keys(Exclude)).
 
 filter(Map, Filter) when is_map(Map) ->
     maps:filter(fun (K, V) -> Filter({K, V}) end, Map);
 filter(List, Filter) when is_list(List) ->
     lists:filter(Filter, List).
 
+select(Map, Include) when is_map(Map) ->
+    maps:with(keys(Include), Map);
+select(Obj, Include) ->
+    reduce(fun (A, K) ->
+                   case get(Obj, K) of
+                       undefined ->
+                           A;
+                       V ->
+                           set(A, K, V)
+                   end
+           end, deflike(undefined, Obj), keys(Include)).
+
 update(Old, New) when is_map(Old), is_map(New) ->
     maps:merge(Old, New);
 update(Old, New) ->
-    fold(fun ({K, V}, A) -> set(A, K, V) end, Old, New).
+    reduce(fun set/2, Old, New).
 
 all(Map, Fun) when is_map(Map) ->
     all(maps:to_list(Map), Fun);
@@ -473,6 +522,9 @@ head([]) ->
 last(List) ->
     head(lists:reverse(List)).
 
+diff(A, B) ->
+    {except(B, A), except(A, B)}.
+
 each(Obj, Fun) ->
     fold(fun (I, _) -> Fun(I) end, nil, Obj).
 
@@ -493,7 +545,7 @@ fold(Fun, Acc, Map) when is_map(Map) ->
     maps:fold(fun (K, V, A) -> Fun({K, V}, A) end, Acc, Map);
 fold(Fun, Acc, List) when is_list(List) ->
     lists:foldl(Fun, Acc, List);
-fold(Fun, Acc, {Mod, Obj}) ->
+fold(Fun, Acc, {Mod, Obj}) when is_atom(Mod) ->
     Mod:fold(Fun, Acc, Obj).
 
 iter(Map) when is_map(Map) ->
@@ -524,13 +576,30 @@ keys(Iter, Filter) when is_function(Filter) ->
     fold(fun (Item, Acc) ->
                  case Filter(Item) of
                      true ->
-                         [element(1, Item)|Acc];
+                         [key(Item)|Acc];
                      false ->
                          Acc
                  end
          end, [], Iter);
 keys(Iter, Filter) ->
-    keys(Iter, fun ({_, V}) -> V =:= Filter end).
+    keys(Iter, fun (I) -> val(I) =:= Filter end).
+
+vals(Map) when is_map(Map) ->
+    maps:values(Map);
+vals(List) when is_list(List) ->
+    [val(Item) || Item <- List].
+
+vals(Iter, Filter) when is_function(Filter) ->
+    fold(fun (Item, Acc) ->
+                 case Filter(Item) of
+                     true ->
+                         [val(Item)|Acc];
+                     false ->
+                         Acc
+                 end
+         end, [], Iter);
+vals(Iter, Filter) ->
+    vals(Iter, fun (I) -> key(I) =:= Filter end).
 
 mapped(Keys) ->
     mapped(Keys, false).
@@ -548,7 +617,9 @@ reduce(Fun, Acc, Map) when is_map(Map) ->
 reduce(Fun, Acc, [H|T]) ->
     reduce(Fun, Fun(Acc, H), T);
 reduce(_, Acc, []) ->
-    Acc.
+    Acc;
+reduce(Fun, Acc, Obj) ->
+    fold(fun (I, A) -> Fun(A, I) end, Acc, Obj).
 
 roll(Fun, Acc, [I|Rest]) ->
     case Fun(I, Acc) of
