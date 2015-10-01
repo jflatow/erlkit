@@ -24,6 +24,8 @@
          get/3,
          set/2,
          set/3,
+         pop/2,
+         pop/3,
          has/2,
          map/2,
          mutate/3,
@@ -61,9 +63,13 @@
          all/2,
          any/2,
          count/3,
+         first/1,
          first/2,
          head/1,
          last/1,
+         tail/1,
+         drop/2,
+         push/2,
          diff/2,
          each/2,
          enum/1,
@@ -229,13 +235,10 @@ op(A, {prepend, X}) ->
     X ++ def(A, []);
 op(A, {cons, H}) ->
     [H|def(A, [])];
-op(A, {tail, H}) ->
-    case A of
-        [H|T] ->
-            T;
-        _ ->
-            A
-    end;
+op(A, {drop, H}) ->
+    drop(def(A, []), H);
+op(A, {push, H}) ->
+    push(def(A, []), H);
 op(A, {Fun, X}) when is_function(Fun) ->
     Fun(A, X);
 op(A, {M, F, X}) ->
@@ -287,6 +290,12 @@ set([], Key, Val) ->
     [{Key, Val}];
 set({Mod, Obj}, Key, Val) when is_atom(Mod) ->
     Mod:set(Obj, Key, Val).
+
+pop(Obj, Key) ->
+    pop(Obj, Key, undefined).
+
+pop(Obj, Key, Default) ->
+    {get(Obj, Key, Default), delete(Obj, Key)}.
 
 has(Map, Key) when is_map(Map) ->
     maps:is_key(Key, Map);
@@ -501,6 +510,9 @@ count(Fun, Acc, {I, N}) when I < N ->
 count(_, Acc, _) ->
     Acc.
 
+first(List) ->
+    head(List).
+
 first(List, Fun) ->
     first(List, Fun, undefined).
 
@@ -521,6 +533,21 @@ head([]) ->
 
 last(List) ->
     head(lists:reverse(List)).
+
+tail([_|T]) ->
+    T;
+tail([]) ->
+    undefined.
+
+drop([H|T], H) ->
+    T;
+drop(List, _) ->
+    List.
+
+push(List = [H|_], H) ->
+    List;
+push(List, H) ->
+    [H|List].
 
 diff(A, B) ->
     {except(B, A), except(A, B)}.
@@ -611,8 +638,10 @@ random(Int) when is_integer(Int) ->
     X = num:log2floor(Int),
     <<Y:X/integer-unit:8>> = crypto:rand_bytes(X),
     (Int * Y) div (1 bsl (X * 8)) + 1;
-random(List) when is_list(List) ->
+random([_|_] = List) ->
     lists:nth(random(length(List)), List);
+random([]) ->
+    undefined;
 random(Iter) ->
     random(iter(Iter)).
 
