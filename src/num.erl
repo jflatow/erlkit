@@ -11,7 +11,7 @@
 
 -module(num).
 -author("Bob Ippolito <bob@mochimedia.com>").
--export([digits/1, frexp/1, pow/2, ceil/1]).
+-export([digits/1, frexp/1, pow/2, ceil/1, log2floor/1]).
 
 %% IEEE 754 Float exponent bias
 -define(FLOAT_BIAS, 1022).

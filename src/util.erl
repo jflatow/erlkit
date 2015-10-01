@@ -607,8 +607,12 @@ mapped(Keys) ->
 mapped(Keys, Val) ->
     fold(fun (Key, Acc) -> Acc#{Key => Val} end, #{}, Keys).
 
+random(Int) when is_integer(Int) ->
+    X = num:log2floor(Int),
+    <<Y:X/integer-unit:8>> = crypto:rand_bytes(X),
+    (Int * Y) div (1 bsl (X * 8)) + 1;
 random(List) when is_list(List) ->
-    lists:nth(random:uniform(length(List)), List);
+    lists:nth(random(length(List)), List);
 random(Iter) ->
     random(iter(Iter)).
 
