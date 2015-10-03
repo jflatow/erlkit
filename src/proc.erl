@@ -1,6 +1,7 @@
 -module(proc).
 
--export([lock/3]).
+-export([lock/3,
+         untrap/2]).
 
 lock(Key, Fun, Msg) ->
     case whereis(Key) of
@@ -18,3 +19,10 @@ lock(Key, Fun, Msg) ->
         Proc ->
             Proc ! Msg
     end.
+
+untrap({'EXIT', _, normal}, Default) ->
+    Default;
+untrap({'EXIT', _, Reason}, _) ->
+    exit(Reason);
+untrap(_, Default) ->
+    Default.

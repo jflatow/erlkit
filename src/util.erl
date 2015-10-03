@@ -478,6 +478,8 @@ filter(List, Filter) when is_list(List) ->
 
 select(Map, Include) when is_map(Map) ->
     maps:with(keys(Include), Map);
+select(List = [H|_], Include) when not is_tuple(H) ->
+    lists:filter(fun (I) -> has(Include, I) end, List);
 select(Obj, Include) ->
     reduce(fun (A, K) ->
                    case get(Obj, K) of
