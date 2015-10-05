@@ -53,6 +53,8 @@
          modify/4,
          remove/2,
          replace/3,
+         sluice/2,
+         sluice/3,
          accrue/3,
          accrue/4,
          accrue/5,
@@ -452,6 +454,17 @@ replace(Obj, Path, Fun) ->
         true ->
             modify(Obj, Path, Fun);
         false ->
+            Obj
+    end.
+
+sluice(Obj, Path) ->
+    sluice(Obj, Path, undefined).
+
+sluice(Obj, Path, Empty) ->
+    case lookup(Obj, Path) of
+        Empty ->
+            remove(Obj, Path);
+        _ ->
             Obj
     end.
 
