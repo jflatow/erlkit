@@ -72,6 +72,8 @@
          tail/1,
          drop/2,
          push/2,
+         draw/1,
+         draw/2,
          diff/2,
          each/2,
          enum/1,
@@ -460,9 +462,9 @@ replace(Obj, Path, Fun) ->
 sluice(Obj, Path) ->
     sluice(Obj, Path, undefined).
 
-sluice(Obj, Path, Empty) ->
+sluice(Obj, Path, Prune) ->
     case lookup(Obj, Path) of
-        Empty ->
+        Prune ->
             remove(Obj, Path);
         _ ->
             Obj
@@ -563,6 +565,17 @@ push(List = [H|_], H) ->
     List;
 push(List, H) ->
     [H|List].
+
+draw(Obj) ->
+    pop(Obj, key(random(Obj))).
+
+draw(Obj, Pref) ->
+    case has(Obj, Pref) of
+        true ->
+            pop(Obj, Pref);
+        false ->
+            pop(Obj, key(random(Obj)))
+    end.
 
 diff(A, B) ->
     {except(B, A), except(A, B)}.
