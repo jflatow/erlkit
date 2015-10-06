@@ -72,6 +72,7 @@
          tail/1,
          drop/2,
          push/2,
+         default/3,
          draw/1,
          draw/2,
          diff/2,
@@ -80,6 +81,7 @@
          enum/2,
          enum/3,
          fold/3,
+         item/2,
          iter/1,
          join/2,
          join/3,
@@ -566,6 +568,9 @@ push(List = [H|_], H) ->
 push(List, H) ->
     [H|List].
 
+default(Obj, Path, Default) ->
+    item(ifndef(Obj, Path, Default), Path).
+
 draw(Obj) ->
     pop(Obj, key(random(Obj))).
 
@@ -602,6 +607,9 @@ fold(Fun, Acc, List) when is_list(List) ->
     lists:foldl(Fun, Acc, List);
 fold(Fun, Acc, {Mod, Obj}) when is_atom(Mod) ->
     Mod:fold(Fun, Acc, Obj).
+
+item(Obj, Path) ->
+    {lookup(Obj, Path), Obj}.
 
 iter(Map) when is_map(Map) ->
     maps:to_list(Map);
