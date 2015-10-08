@@ -132,10 +132,9 @@ foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
                     Acc;
                 false ->
                     Rash = util:get(Opts, rash),
-                    Recoup = util:get(Opts, recoup),
                     path:foldl(Root,
                                fun (P, A) ->
-                                       foldpath({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Recoup, Rash)
+                                       foldpath({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Rash)
                                end, Acc, Range)
             end
     end.
@@ -390,38 +389,34 @@ strike(File, Offs) ->
             {error, badentry}
     end.
 
-foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, Start) when is_integer(Start) ->
+foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
     case file:read_file(Abs) of
         {ok, <<_:Start/binary, Data/binary>>} ->
-            foldentries(Data, {Rel, Start}, Fun, Acc, Range, Recoup);
+            foldentries(Data, {Rel, Start}, Fun, Acc, Range);
         {ok, _} ->
             {stop, {error, {position, Start}}};
         Error ->
             {stop, Error}
     end;
-foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, Recoup, true) ->
-    foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, OLo);
-foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, _) ->
-    foldpath({Abs, Rel}, Fun, Acc, Range, Recoup, ?OZero).
+foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, true) ->
+    foldpath({Abs, Rel}, Fun, Acc, Range, OLo);
+foldpath({Abs, Rel}, Fun, Acc, Range, _) ->
+    foldpath({Abs, Rel}, Fun, Acc, Range, ?OZero).
 
-foldentries(_, _, _, {stop, Acc}, _, _) ->
+foldentries(_, _, _, {stop, Acc}, _) ->
     {stop, Acc};
-foldentries(_, Id, _, Acc, {_, Upper}, _) when Id >= Upper ->
+foldentries(_, Id, _, Acc, {_, Upper}) when Id >= Upper ->
     {stop, Acc};
-foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range, Recoup) ->
+foldentries(File, {Rel, Offs} = Id, Fun, Acc, {Lower, _} = Range) ->
     case entry(File, Offs) of
         {error, badentry} ->
             Acc;
         {error, _} = Error ->
             {stop, Error};
         {Rest, _, Next} when Id < Lower ->
-            foldentries(Rest, {Rel, Next}, Fun, Acc, Range, Recoup);
-        {Rest, {nil, _}, Next} when Recoup =/= true ->
-            foldentries(Rest, {Rel, Next}, Fun, Acc, Range, Recoup);
-        {Rest, {ok, Data}, Next} when Recoup =/= true ->
-            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range, Recoup);
-        {Rest, Entry, Next} ->
-            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Entry}, Acc), Range, Recoup)
+            foldentries(Rest, {Rel, Next}, Fun, Acc, Range);
+        {Rest, Data, Next} ->
+            foldentries(Rest, {Rel, Next}, Fun, Fun({{Id, {Rel, Next}}, Data}, Acc), Range)
     end.
 
 %% internal
