@@ -534,8 +534,10 @@ count(_, Acc, _) ->
 first(List) ->
     head(List).
 
-first(List, Fun) ->
-    first(List, Fun, undefined).
+first(List, Fun) when is_function(Fun) ->
+    first(List, Fun, undefined);
+first(List, Default) ->
+    first(List, fun (_) -> true end, Default).
 
 first(List, Fun, Default) ->
     first(List, Fun, fun val/1, Default).
