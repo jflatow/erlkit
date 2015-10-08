@@ -278,7 +278,7 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    first(List, fun (I) -> key(I) =:= Key end, Default);
+    first(List, fun (I) -> key(I) =:= Key end, fun val/1, Default);
 get({Mod, Obj}, Key, Default) when is_atom(Mod) ->
     Mod:get(Obj, Key, Default).
 
@@ -540,7 +540,7 @@ first(List, Default) ->
     first(List, fun (_) -> true end, Default).
 
 first(List, Fun, Default) ->
-    first(List, Fun, fun val/1, Default).
+    first(List, Fun, fun (I) -> I end, Default).
 
 first([H|T], Fun, Val, Default) ->
     case Fun(H) of
