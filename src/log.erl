@@ -502,9 +502,17 @@ do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = St
             {error, {close, Reason}, State}
     end;
 do({write, Entry}, #state{file=File, path=Path, offs=Offs} = State) ->
-    Size = size(Entry),
+    {Data, EOD} = case Entry of
+                      <<D/binary>> ->
+                          {D, $\n};
+                      {ok, D} ->
+                          {D, $\n};
+                      {nil, D} ->
+                          {D, $\^x}
+                  end,
+    Size = size(Data),
     Next = Offs + Size + 5,
-    case file:pwrite(File, Offs, <<Size:32, Entry/binary, $\n>>) of
+    case file:pwrite(File, Offs, <<Size:32, Data/binary, EOD>>) of
         ok ->
             {{ok, {{Path, Offs}, {Path, Next}}}, State#state{offs=Next}};
         Error ->
