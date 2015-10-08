@@ -1,6 +1,7 @@
 -module(str).
 
--export([join/2,
+-export([def/2,
+         join/2,
          snap/2,
          split/2,
          substr/2,
@@ -18,6 +19,13 @@
          endswith/2]).
 
 -import(util, [bin/1, list/1]).
+
+def(<<>>, Default) ->
+    Default;
+def([], Default) ->
+    Default;
+def(Value, Default) ->
+    util:def(Value, Default).
 
 join(List, Sep) ->
     util:join(List, Sep).

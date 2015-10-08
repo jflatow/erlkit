@@ -67,6 +67,9 @@
          count/3,
          first/1,
          first/2,
+         first/3,
+         range/2,
+         range/3,
          head/1,
          last/1,
          tail/1,
@@ -85,6 +88,9 @@
          iter/1,
          join/2,
          join/3,
+         pair/1,
+         pair/2,
+         pair/3,
          keys/1,
          keys/2,
          vals/1,
@@ -256,10 +262,6 @@ def(null, Default) ->
     Default;
 def(nil, Default) ->
     Default;
-def(<<>>, Default) ->
-    Default;
-def([], Default) ->
-    Default;
 def(Value, _) ->
     Value.
 
@@ -276,7 +278,7 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    val(first(List, fun (I) -> key(I) =:= Key end, Default));
+    first(List, fun (I) -> key(I) =:= Key end, Default);
 get({Mod, Obj}, Key, Default) when is_atom(Mod) ->
     Mod:get(Obj, Key, Default).
 
@@ -535,15 +537,45 @@ first(List) ->
 first(List, Fun) ->
     first(List, Fun, undefined).
 
-first([H|T], Fun, Default) ->
+first(List, Fun, Default) ->
+    first(List, Fun, fun val/1, Default).
+
+first([H|T], Fun, Val, Default) ->
     case Fun(H) of
         true ->
-            H;
+            Val(H);
         false ->
-            first(T, Fun, Default)
+            first(T, Fun, Val, Default)
     end;
-first([], _, Default) ->
+first([], _, _, Default) ->
     Default.
+
+range(List, Start) ->
+    range(List, Start, fun (_) -> false end).
+
+range(List, Start, Stop) when not is_function(Start) ->
+    range(List, fun (I) -> Start =< I end, Stop);
+range(List, Start, Stop) when not is_function(Stop) ->
+    range(List, Start, fun (I) -> I >= Stop end);
+range(List, Start, Stop) ->
+    range(List, Start, Stop, [], undefined).
+
+range([H|T], Start, Stop, Acc, true) ->
+    case Stop(H) of
+        true ->
+            Acc;
+        false ->
+            [H|range(T, Start, Stop, Acc, true)]
+    end;
+range([H|T], Start, Stop, Acc, _) ->
+    case Start(H) of
+        true ->
+            [H|range(T, Start, Stop, Acc, true)];
+        false ->
+            range(T, Start, Stop, Acc, false)
+    end;
+range([], _, _, Acc, _) ->
+    Acc.
 
 head([H|_]) ->
     H;
@@ -629,6 +661,20 @@ join([A, B|Rest], Sep, Skip) ->
     [A, Sep|join([B|Rest], Sep, Skip)];
 join(List, _Sep, _Skip) ->
     List.
+
+pair(List) ->
+    pair(fun (A, B) -> {A, B} end, List).
+
+pair(Fun, List) ->
+    lists:reverse(
+      pair(fun ({A, B}, Acc) ->
+                   [Fun(A, B)|Acc]
+           end, [], List)).
+
+pair(Fun, Acc, [A, B|Rest]) ->
+    pair(Fun, Fun({A, B}, Acc), [B|Rest]);
+pair(_, Acc, List) when is_list(List) ->
+    Acc.
 
 keys(Map) when is_map(Map) ->
     maps:keys(Map);
