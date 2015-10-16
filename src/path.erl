@@ -12,8 +12,11 @@
          lines/2,
          join/2,
          joinl/2,
+         info/1,
+         info/2,
          safe/1,
          size/1,
+         size/2,
          test/2,
          test/3,
          next/1,
@@ -155,6 +158,17 @@ join(Dir, Name) ->
 joinl(Dir, Names) ->
     [join(Dir, Name) || Name <- Names].
 
+info(Path) ->
+    info(Path, []).
+
+info(Path, Opts) ->
+    case util:get(Opts, follow) of
+        true ->
+            file:read_file_info(Path);
+        _ ->
+            file:read_link_info(Path)
+    end.
+
 safe(<<>>) ->
     true;
 safe(Path) when is_binary(Path) ->
@@ -163,30 +177,38 @@ safe(Path) ->
     safe(util:bin(Path)).
 
 size(Path) ->
-    case file:read_file_info(Path) of
+    path:size(Path, []).
+
+size(Path, Opts) ->
+    case info(Path, Opts) of
         {ok, #file_info{size=Size, type=directory}} ->
-            Size + lists:sum([path:size(P) || P <- list(Path)]);
+            Size + lists:sum([path:size(P, Opts) || P <- list(Path)]);
         {ok, #file_info{size=Size}} ->
             Size;
         {error, enoent} ->
             0
     end.
 
-test(Path, Opts) ->
-    case file:read_file_info(Path) of
+test(Path, Features) ->
+    test(Path, Features, []).
+
+test(Path, Features, Opts) ->
+    case info(Path, Opts) of
         {ok, Info} ->
-            test(Path, Info, Opts);
-        _ ->
+            test(Path, Info, Features, Opts);
+        {error, enoent} ->
             false
     end.
 
-test(Path, Info, List) when is_list(List) ->
-    lists:all(fun (X) -> test(Path, Info, X) end, List);
-test(_, #file_info{type=Type}, directory) ->
+test(Path, Info, List, Opts) when is_list(List) ->
+    lists:all(fun (X) -> test(Path, Info, X, Opts) end, List);
+test(_, #file_info{type=Type}, directory, _) ->
     Type =:= directory;
-test(_, #file_info{type=Type}, regular) ->
+test(_, #file_info{type=Type}, regular, _) ->
     Type =:= regular;
-test(_, #file_info{mode=Mode}, executable) ->
+test(_, #file_info{type=Type}, symlink, _) ->
+    Type =:= symlink;
+test(_, #file_info{mode=Mode}, executable, _) ->
     Mode band 8#00111 > 0.
 
 next(Path) ->
