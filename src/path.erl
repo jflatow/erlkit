@@ -13,6 +13,7 @@
          join/2,
          joinl/2,
          safe/1,
+         size/1,
          test/2,
          test/3,
          next/1,
@@ -160,6 +161,16 @@ safe(Path) when is_binary(Path) ->
     [P || <<C, _/bits>> = P <- filename:split(Path), C =:= $. orelse C =:= $/] =:= [];
 safe(Path) ->
     safe(util:bin(Path)).
+
+size(Path) ->
+    case file:read_file_info(Path) of
+        {ok, #file_info{size=Size, type=directory}} ->
+            Size + lists:sum([path:size(P) || P <- list(Path)]);
+        {ok, #file_info{size=Size}} ->
+            Size;
+        {error, enoent} ->
+            0
+    end.
 
 test(Path, Opts) ->
     case file:read_file_info(Path) of
