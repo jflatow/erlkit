@@ -51,10 +51,10 @@
          lookup/3,
          modify/3,
          modify/4,
+         prune/2,
+         prune/3,
          remove/2,
          replace/3,
-         sluice/2,
-         sluice/3,
          accrue/3,
          accrue/4,
          accrue/5,
@@ -441,6 +441,17 @@ modify(Obj, [Key|Path], Fun, Empty) ->
 modify(Obj, Key, Fun, Empty) ->
     modify(Obj, [Key], Fun, Empty).
 
+prune(Obj, Path) ->
+    prune(Obj, Path, undefined).
+
+prune(Obj, Path, Value) ->
+    case lookup(Obj, Path) of
+        Value ->
+            remove(Obj, Path);
+        _ ->
+            Obj
+    end.
+
 remove(Obj, []) ->
     Obj;
 remove(Obj, [Key]) ->
@@ -460,17 +471,6 @@ replace(Obj, Path, Fun) ->
         true ->
             modify(Obj, Path, Fun);
         false ->
-            Obj
-    end.
-
-sluice(Obj, Path) ->
-    sluice(Obj, Path, undefined).
-
-sluice(Obj, Path, Prune) ->
-    case lookup(Obj, Path) of
-        Prune ->
-            remove(Obj, Path);
-        _ ->
             Obj
     end.
 
