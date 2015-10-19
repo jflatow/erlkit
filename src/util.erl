@@ -64,6 +64,8 @@
          update/2,
          all/2,
          any/2,
+         chunk/2,
+         chunk/4,
          count/3,
          first/1,
          first/2,
@@ -524,6 +526,21 @@ any(Map, Fun) when is_map(Map) ->
 any(List, Fun) when is_list(List) ->
     lists:any(Fun, List).
 
+chunk(Obj, N) ->
+    lists:reverse(chunk(fun (I, A) -> [I|A] end, [], Obj, N)).
+
+chunk(Fun, Acc, Obj, N) ->
+    case fold(fun (I, {K, C, A}) when K < N ->
+                      {K + 1, [I|C], A};
+                  (I, {_, C, A}) ->
+                      {1, [I], Fun(lists:reverse(C), A)}
+              end, {0, [], Acc}, Obj) of
+        {0, [], A} ->
+            A;
+        {_, C, A} ->
+            Fun(lists:reverse(C), A)
+    end.
+
 count(Fun, Acc, N) when is_number(N) ->
     count(Fun, Acc, {0, N});
 count(Fun, Acc, {I, N}) when I < N ->
@@ -740,9 +757,11 @@ reduce(Fun, Acc, Obj) ->
 
 roll(Fun, Acc, [I|Rest]) ->
     case Fun(I, Acc) of
-        {done, A} ->
+        {stop, A} ->
             A;
         {continue, A} ->
+            roll(Fun, A, Rest);
+        A ->
             roll(Fun, A, Rest)
     end;
 roll(_Fun, Acc, []) ->
