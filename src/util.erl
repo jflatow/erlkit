@@ -15,6 +15,8 @@
          unhex/1,
          hexdigit/1,
          unhexdigit/1,
+         match/2,
+         tagged/3,
          ok/1,
          ok/2,
          op/2,
@@ -46,18 +48,19 @@
          hasany/2,
          hasall/2,
          exists/2,
-         ifndef/3,
          lookup/2,
          lookup/3,
          modify/3,
          modify/4,
-         prune/2,
-         prune/3,
-         remove/2,
-         replace/3,
          accrue/3,
          accrue/4,
          accrue/5,
+         create/3,
+         create/4,
+         remove/2,
+         remove/3,
+         swap/3,
+         swap/4,
          except/2,
          filter/2,
          select/2,
@@ -208,6 +211,16 @@ hexdigit(15) -> $F.
 unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
+
+match(Value, Fun) when is_function(Fun) ->
+    {Fun(Value), Value};
+match(Value, Val) ->
+    {Value =:= Val, Value}.
+
+tagged(Tag, Value, true) ->
+    {Tag, Value};
+tagged(_, Value, _) ->
+    Value.
 
 ok(Term) ->
     ok(Term, undefined).
@@ -404,14 +417,6 @@ exists(Obj, [Key|Path]) ->
 exists(Obj, Key) ->
     exists(Obj, [Key]).
 
-ifndef(Obj, Path, Default) ->
-    modify(Obj, Path,
-           fun (undefined) ->
-                   Default;
-               (Defined) ->
-                   Defined
-           end).
-
 lookup(Obj, Path) ->
     lookup(Obj, Path, undefined).
 
@@ -443,16 +448,22 @@ modify(Obj, [Key|Path], Fun, Empty) ->
 modify(Obj, Key, Fun, Empty) ->
     modify(Obj, [Key], Fun, Empty).
 
-prune(Obj, Path) ->
-    prune(Obj, Path, undefined).
+accrue(Obj, Path, Delta) ->
+    accrue(Obj, Path, Delta, fun op/2).
 
-prune(Obj, Path, Value) ->
-    case lookup(Obj, Path) of
-        Value ->
-            remove(Obj, Path);
-        _ ->
-            Obj
-    end.
+accrue(Obj, Path, Delta, Op) ->
+    accrue(Obj, Path, Delta, Op, #{}).
+
+accrue(Obj, Path, Deltas, Op, Empty) when is_list(Deltas) ->
+    modify(Obj, Path, fun (Prior) -> reduce(Op, Prior, Deltas) end, Empty);
+accrue(Obj, Path, Delta, Op, Empty) ->
+    modify(Obj, Path, fun (Prior) -> Op(Prior, Delta) end, Empty).
+
+create(Obj, Path, Initial) ->
+    create(Obj, Path, Initial, []).
+
+create(Obj, Path, Initial, Opts) ->
+    swap(Obj, Path, Initial, set(Opts, match, fun (V) -> V =:= undefined end)).
 
 remove(Obj, []) ->
     Obj;
@@ -468,24 +479,24 @@ remove(Obj, [Key|Path]) ->
 remove(Obj, Key) ->
     remove(Obj, [Key]).
 
-replace(Obj, Path, Fun) ->
-    case exists(Obj, Path) of
-        true ->
-            modify(Obj, Path, Fun);
-        false ->
-            Obj
+remove(Obj, Path, Opts) ->
+    case match(lookup(Obj, Path), get(Opts, match, fun (_) -> true end)) of
+        {true, _} = Tag ->
+            tagged(Tag, remove(Obj, Path), get(Opts, tagged));
+        {false, _} = Tag ->
+            tagged(Tag, Obj, get(Opts, tagged))
     end.
 
-accrue(Obj, Path, Delta) ->
-    accrue(Obj, Path, Delta, fun op/2).
+swap(Obj, Path, Swap) ->
+    swap(Obj, Path, Swap, []).
 
-accrue(Obj, Path, Delta, Op) ->
-    accrue(Obj, Path, Delta, Op, #{}).
-
-accrue(Obj, Path, Deltas, Op, Empty) when is_list(Deltas) ->
-    modify(Obj, Path, fun (Prior) -> reduce(Op, Prior, Deltas) end, Empty);
-accrue(Obj, Path, Delta, Op, Empty) ->
-    modify(Obj, Path, fun (Prior) -> Op(Prior, Delta) end, Empty).
+swap(Obj, Path, Swap, Opts) ->
+    case match(lookup(Obj, Path), get(Opts, match, fun (V) -> V =/= undefined end)) of
+        {true, _} = Tag ->
+            tagged(Tag, modify(Obj, Path, Swap), get(Opts, tagged));
+        {false, _} = Tag ->
+            tagged(Tag, Obj, get(Opts, tagged))
+    end.
 
 except(Map, Exclude) when is_map(Map) ->
     maps:without(keys(Exclude), Map);
@@ -620,7 +631,7 @@ push(List, H) ->
     [H|List].
 
 default(Obj, Path, Default) ->
-    item(ifndef(Obj, Path, Default), Path).
+    item(create(Obj, Path, Default), Path).
 
 draw(Obj) ->
     pop(Obj, key(random(Obj))).
