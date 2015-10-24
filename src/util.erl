@@ -16,7 +16,6 @@
          hexdigit/1,
          unhexdigit/1,
          match/2,
-         tagged/3,
          ok/1,
          ok/2,
          op/2,
@@ -105,6 +104,7 @@
          vals/2,
          index/1,
          index/2,
+         index/3,
          invert/1,
          invert/2,
          mapped/1,
@@ -112,7 +112,8 @@
          random/1,
          reduce/3,
          roll/3,
-         skip/2]).
+         skip/2,
+         wrap/3]).
 
 atom(Any) ->
     atom(Any, false).
@@ -224,11 +225,6 @@ match(Value, Fun) when is_function(Fun) ->
 match(Value, Val) ->
     {Value =:= Val, Value}.
 
-tagged(Tag, Value, true) ->
-    {Tag, Value};
-tagged(_, Value, _) ->
-    Value.
-
 ok(Term) ->
     ok(Term, undefined).
 
@@ -273,6 +269,8 @@ op(A, {drop, H}) ->
     drop(def(A, []), H);
 op(A, {push, H}) ->
     push(def(A, []), H);
+op(A, {edit, X = {Add, _}}) ->
+    edit(deflike(A, Add), X);
 op(A, {Fun, X}) when is_function(Fun) ->
     Fun(A, X);
 op(A, {M, F, X}) ->
@@ -489,9 +487,9 @@ remove(Obj, Key) ->
 remove(Obj, Path, Opts) ->
     case match(lookup(Obj, Path), get(Opts, match, fun (_) -> true end)) of
         {true, _} = Tag ->
-            tagged(Tag, remove(Obj, Path), get(Opts, tagged));
+            wrap(Tag, remove(Obj, Path), get(Opts, wrapped));
         {false, _} = Tag ->
-            tagged(Tag, Obj, get(Opts, tagged))
+            wrap(Tag, Obj, get(Opts, wrapped))
     end.
 
 swap(Obj, Path, Swap) ->
@@ -500,9 +498,9 @@ swap(Obj, Path, Swap) ->
 swap(Obj, Path, Swap, Opts) ->
     case match(lookup(Obj, Path), get(Opts, match, fun (V) -> V =/= undefined end)) of
         {true, _} = Tag ->
-            tagged(Tag, modify(Obj, Path, Swap), get(Opts, tagged));
+            wrap(Tag, modify(Obj, Path, Swap), get(Opts, wrapped));
         {false, _} = Tag ->
-            tagged(Tag, Obj, get(Opts, tagged))
+            wrap(Tag, Obj, get(Opts, wrapped))
     end.
 
 except(Map, Exclude) when is_map(Map) ->
@@ -772,12 +770,13 @@ vals(Iter, Filter) ->
     vals(Iter, fun (I) -> key(I) =:= Filter end).
 
 index(Obj) ->
-    index(Obj, fun val/1).
+    index(Obj, deflike(undefined, Obj)).
 
-index(Obj, Val) ->
-    fold(fun (Item, Acc) ->
-                 set(Acc, Val(Item), key(Item))
-         end, deflike(undefined, Obj), Obj).
+index(Obj, Acc) ->
+    index(Obj, Acc, fun invert/1).
+
+index(Obj, Acc, Inv) ->
+    fold(fun (I, A) -> set(A, Inv(I)) end, Acc, Obj).
 
 invert(Item) ->
     invert(Item, fun val/1).
@@ -829,3 +828,8 @@ skip(N, [_|Tail]) when N > 0 ->
     skip(N - 1, Tail);
 skip(_, Rest) ->
     Rest.
+
+wrap(Tag, Value, true) ->
+    {Tag, Value};
+wrap(_, Value, _) ->
+    Value.
