@@ -64,6 +64,7 @@
          except/2,
          filter/2,
          select/2,
+         insert/2,
          update/2,
          all/2,
          any/2,
@@ -81,9 +82,11 @@
          drop/2,
          push/2,
          default/3,
+         delta/2,
+         diff/2,
+         edit/2,
          draw/1,
          draw/2,
-         diff/2,
          each/2,
          enum/1,
          enum/2,
@@ -448,16 +451,16 @@ modify(Obj, [Key|Path], Fun, Empty) ->
 modify(Obj, Key, Fun, Empty) ->
     modify(Obj, [Key], Fun, Empty).
 
-accrue(Obj, Path, Delta) ->
-    accrue(Obj, Path, Delta, fun op/2).
+accrue(Obj, Path, Change) ->
+    accrue(Obj, Path, Change, fun op/2).
 
-accrue(Obj, Path, Delta, Op) ->
-    accrue(Obj, Path, Delta, Op, #{}).
+accrue(Obj, Path, Change, Op) ->
+    accrue(Obj, Path, Change, Op, #{}).
 
-accrue(Obj, Path, Deltas, Op, Empty) when is_list(Deltas) ->
-    modify(Obj, Path, fun (Prior) -> reduce(Op, Prior, Deltas) end, Empty);
-accrue(Obj, Path, Delta, Op, Empty) ->
-    modify(Obj, Path, fun (Prior) -> Op(Prior, Delta) end, Empty).
+accrue(Obj, Path, Changes, Op, Empty) when is_list(Changes) ->
+    modify(Obj, Path, fun (Prior) -> reduce(Op, Prior, Changes) end, Empty);
+accrue(Obj, Path, Change, Op, Empty) ->
+    modify(Obj, Path, fun (Prior) -> Op(Prior, Change) end, Empty).
 
 create(Obj, Path, Initial) ->
     create(Obj, Path, Initial, []).
@@ -522,10 +525,19 @@ select(Obj, Include) ->
                    end
            end, deflike(undefined, Obj), keys(Include)).
 
+insert(Obj, Item) when not is_list(Obj); is_tuple(Item) ->
+    set(Obj, Item);
+insert([Item|List], Item) ->
+    [Item|List];
+insert([Other|List], Item) ->
+    [Other|insert(List, Item)];
+insert([], Item) ->
+    [Item].
+
 update(Old, New) when is_map(Old), is_map(New) ->
     maps:merge(Old, New);
 update(Old, New) ->
-    reduce(fun set/2, Old, New).
+    reduce(fun insert/2, Old, New).
 
 all(Map, Fun) when is_map(Map) ->
     all(maps:to_list(Map), Fun);
@@ -633,6 +645,24 @@ push(List, H) ->
 default(Obj, Path, Default) ->
     item(create(Obj, Path, Default), Path).
 
+delta(A, B) ->
+    fold(fun (Item, Delta) ->
+                 Key = key(Item),
+                 Val = val(Item),
+                 case get(B, Key) of
+                     Val ->
+                         delete(Delta, Key);
+                     _ ->
+                         Delta
+                 end
+         end, B, A).
+
+diff(A, B) ->
+    {delta(A, B), delta(B, A)}.
+
+edit(A, {Added, Removed}) ->
+    delta(Removed, update(A, Added)).
+
 draw(Obj) ->
     pop(Obj, key(random(Obj))).
 
@@ -643,9 +673,6 @@ draw(Obj, Pref) ->
         false ->
             pop(Obj, key(random(Obj)))
     end.
-
-diff(A, B) ->
-    {except(B, A), except(A, B)}.
 
 each(Obj, Fun) ->
     fold(fun (I, _) -> Fun(I) end, nil, Obj).
