@@ -103,6 +103,10 @@
          keys/2,
          vals/1,
          vals/2,
+         index/1,
+         index/2,
+         invert/1,
+         invert/2,
          mapped/1,
          mapped/2,
          random/1,
@@ -766,6 +770,20 @@ vals(Iter, Filter) when is_function(Filter) ->
          end, [], Iter);
 vals(Iter, Filter) ->
     vals(Iter, fun (I) -> key(I) =:= Filter end).
+
+index(Obj) ->
+    index(Obj, fun val/1).
+
+index(Obj, Val) ->
+    fold(fun (Item, Acc) ->
+                 set(Acc, Val(Item), key(Item))
+         end, deflike(undefined, Obj), Obj).
+
+invert(Item) ->
+    invert(Item, fun val/1).
+
+invert(Item, Val) ->
+    {Val(Item), key(Item)}.
 
 mapped(Keys) ->
     mapped(Keys, false).
