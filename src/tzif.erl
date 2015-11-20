@@ -1,4 +1,5 @@
 -module(tzif).
+-author("Jared Flatow").
 
 -export([timezone/1,
          timezone/2,

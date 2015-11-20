@@ -1,4 +1,5 @@
 -module(str).
+-author("Jared Flatow").
 
 -export([def/2,
          join/2,

@@ -1,4 +1,5 @@
 -module(proc).
+-author("Jared Flatow").
 
 -export([lock/3,
          untrap/2]).

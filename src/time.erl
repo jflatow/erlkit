@@ -1,4 +1,5 @@
 -module(time).
+-author("Jared Flatow").
 
 -export([ago/1,
          ago/2,

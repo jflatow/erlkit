@@ -1,4 +1,5 @@
 -module(util).
+-author("Jared Flatow").
 
 -export([atom/1,
          atom/2,

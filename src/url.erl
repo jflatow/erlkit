@@ -1,12 +1,20 @@
 -module(url).
+-author("Jared Flatow").
+
+-export_type([str/0, url/0]).
+
+-type str() :: binary().
+-type url() :: map().
 
 -export([empty/0,
          parse/1,
          parse/2,
          format/1]).
 
+-export([rd/2]).
 -export([up/2, up/3]).
 -export([p/2, q/2, f/2, u/2, u/3, u/4]).
+-export([pz/2, qu/2, qz/2, fu/2, fz/2]).
 
 -export([encode/1,
          decode/1,
@@ -108,6 +116,17 @@ format(fragment, #{fragment := Fragment}, Acc) when Fragment =/= undefined ->
 format(fragment, _, Acc) ->
     Acc.
 
+rd(Field, URL) when not is_map(URL) ->
+    rd(Field, parse(URL));
+rd(path, URL) ->
+    filename:split(util:defget(URL, path, <<>>));
+rd(query, URL) ->
+    decode(util:defget(URL, query, <<>>));
+rd(fragment, URL) ->
+    decode(util:defget(URL, fragment, <<>>));
+rd(Field, URL) ->
+    util:get(URL, Field).
+
 up(URL, Opts) ->
     lists:foldl(fun ({F, V}, U) -> up(F, U, V) end, URL, Opts).
 
@@ -128,6 +147,21 @@ f(URL, Params) -> format(up(fragment, URL, Params)).
 u(URL, Opts) -> format(up(URL, Opts)).
 u(URL, P, Q) -> u(URL, [{path, P}, {query, Q}]).
 u(URL, P, Q, F) -> u(URL, [{path, P}, {query, Q}, {fragment, F}]).
+
+pz(URL, Parts) ->
+    p(URL, rd(path, URL) ++ Parts).
+
+qu(URL, Params) ->
+    q(URL, util:update(rd(query, URL), Params)).
+
+qz(URL, Params) ->
+    q(URL, rd(query, URL) ++ util:iter(Params)).
+
+fu(URL, Params) ->
+    f(URL, util:update(rd(fragment, URL), Params)).
+
+fz(URL, Params) ->
+    f(URL, rd(fragment, URL) ++ util:iter(Params)).
 
 decode(<<>>) ->
     [];

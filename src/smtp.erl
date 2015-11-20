@@ -1,4 +1,5 @@
 -module(smtp).
+-author("Jared Flatow").
 
 %% SMTP primitives (RFC 5321)
 

@@ -1,4 +1,5 @@
 -module(marker).
+-author("Jared Flatow").
 
 -export([io/1,
          new/2,

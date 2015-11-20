@@ -1,4 +1,5 @@
 -module(log).
+-author("Jared Flatow").
 
 -export_type([log/0,
               ref/0,

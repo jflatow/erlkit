@@ -1,4 +1,5 @@
 -module(abnf).
+-author("Jared Flatow").
 
 -export([maybe/3,
          maybe/4,

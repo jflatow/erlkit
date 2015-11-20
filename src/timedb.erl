@@ -1,4 +1,5 @@
 -module(timedb).
+-author("Jared Flatow").
 
 -export([open/1,
          open/2,

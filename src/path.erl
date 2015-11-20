@@ -1,4 +1,5 @@
 -module(path).
+-author("Jared Flatow").
 
 -export([foldl/3,
          foldl/4,

@@ -1,4 +1,5 @@
 -module(mime).
+-author("Jared Flatow").
 
 %% Basic Internet Message / MIME parsing (RFC 5322 + 204{5,6,7})
 

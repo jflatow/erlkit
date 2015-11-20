@@ -1,4 +1,5 @@
 -module(ical).
+-author("Jared Flatow").
 
 %% General parsing
 -export([parse/1,

@@ -1,4 +1,5 @@
 -module(perf).
+-author("Jared Flatow").
 
 -export([do/1,
          repeat/2,
