@@ -117,6 +117,8 @@ rstrip(Seq, _) ->
 strip(Seq, C) ->
     rstrip(lstrip(Seq, C), C).
 
+lower(undefined) ->
+    undefined;
 lower(Bin) when is_binary(Bin) ->
     unicode:characters_to_binary(lower(unicode:characters_to_list(Bin)));
 lower(Str) ->

@@ -1,9 +1,9 @@
 -module(url).
 -author("Jared Flatow").
 
--export_type([str/0, url/0]).
+-export_type([raw/0, url/0]).
 
--type str() :: binary().
+-type raw() :: iodata().
 -type url() :: map().
 
 -export([empty/0,
@@ -22,6 +22,9 @@
          unescape/1,
          esc/1,
          enc/1]).
+
+-export([browse/1,
+         browse/2]).
 
 -import(util, [hexdigit/1,
                unhexdigit/1]).
@@ -184,8 +187,6 @@ encode([]) ->
 
 escape(<<C, Rest/bits>>) when ?UNRESERVED(C) ->
     [C|escape(Rest)];
-escape(<<" ", Rest/bits>>) ->
-    [$+|escape(Rest)];
 escape(<<Hi:4, Lo:4, Rest/bits>>) ->
     [$%, hexdigit(Hi), hexdigit(Lo)|escape(Rest)];
 escape(<<>>) ->
@@ -210,3 +211,15 @@ unescape(String) when is_list(String) ->
 
 esc(Data) -> iolist_to_binary(escape(Data)).
 enc(List) -> iolist_to_binary(encode(List)).
+
+browse(URL) ->
+    browse(URL, os:type()).
+
+browse(URL, OS) when is_map(URL) ->
+    browse(format(URL), OS);
+browse(URL, {unix, darwin}) ->
+    os:cmd(str:format("open '~s'", [URL]));
+browse(URL, {unix, _}) ->
+    os:cmd(str:format("xdg-open '~s'", [URL]));
+browse(URL, {win32, _}) ->
+    os:cmd(str:format("start '~s'", [URL])).

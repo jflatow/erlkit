@@ -29,6 +29,7 @@
          keywords/1,
          content_type/1,
          content_transfer_encoding/1,
+         contents/1,
          find_type/2,
          find_text/1,
          decode/1,
@@ -343,7 +344,7 @@ header({Headers, _Body}, Name, Default, Switch) ->
 header([{Field, Value}|Headers], Name, Default, norm) ->
     case normalize(Field) of
         Name ->
-            Value;
+            bin(Value);
         _ ->
             header(Headers, Name, Default, norm)
     end;
@@ -414,6 +415,9 @@ content_type([Param], Type, Params) ->
 
 content_transfer_encoding(Headerish) ->
     normalize(skip_spaces(header(Headerish, "content-transfer-encoding", "7bit"))).
+
+contents({Headers, Body}) ->
+    mimetype:decode(content_type(Headers), Body).
 
 find_type(Type, {Headers, Body}) ->
     case content_type(Headers) of

@@ -9,9 +9,7 @@
 -export([alg_jwt/1,
          alg_erl/1,
          sign/2,
-         sign/3,
-         verify/3,
-         verify/4]).
+         verify/3]).
 
 encode(Payload) ->
     encode(Payload, []).
@@ -60,33 +58,9 @@ alg_erl(<<"none">>) ->
 sign({H, P}, Opts) ->
     sign(<<H/binary, ".", P/binary>>, Opts);
 sign(Data, Opts) ->
-    sign(util:get(Opts, alg), util:get(Opts, key), Data).
-
-sign({hmac, Type}, Key, Data) ->
-    crypto:hmac(Type, Key, Data);
-sign({rsa, Type}, Key, Data) when is_list(Key) ->
-    crypto:sign(rsa, Type, Data, Key);
-sign({ecdsa, Type}, Key, Data) when is_list(Key) ->
-    crypto:sign(ecdsa, Type, Data, Key);
-sign({_, Type}, Key, Data) when is_tuple(Key) ->
-    public_key:sign(Data, Type, Key);
-sign(undefined, undefined, _) ->
-    <<>>.
+    cipher:sign(util:get(Opts, alg), util:get(Opts, key), Data).
 
 verify({H, P}, Signature, Opts) ->
     verify(<<H/binary, ".", P/binary>>, Signature, Opts);
 verify(Data, Signature, Opts) ->
-    verify(util:get(Opts, alg), util:get(Opts, key), Data, Signature).
-
-verify({hmac, Type}, Key, Data, Signature) ->
-    crypto:hmac(Type, Key, Data) =:= Signature;
-verify({rsa, Type}, Key, Data, Signature) when is_list(Key) ->
-    crypto:verify(rsa, Type, Data, Signature, Key);
-verify({ecdsa, Type}, Key, Data, Signature) when is_list(Key) ->
-    crypto:verify(ecdsa, Type, Data, Signature, Key);
-verify({_, Type}, Key, Data, Signature) when is_tuple(Key) ->
-    public_key:verify(Data, Type, Signature, Key);
-verify(undefined, undefined, _, <<>>) ->
-    true;
-verify(undefined, undefined, _, _) ->
-    false.
+    cipher:verify(util:get(Opts, alg), util:get(Opts, key), Data, Signature).
