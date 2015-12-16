@@ -43,6 +43,8 @@
          defget/3,
          getdef/2,
          getdef/3,
+         getone/1,
+         getone/2,
          setdef/3,
          setdef/4,
          hasany/2,
@@ -79,6 +81,7 @@
          head/1,
          last/1,
          tail/1,
+         init/2,
          drop/2,
          push/2,
          default/3,
@@ -252,6 +255,8 @@ op(A, {'-', X}) ->
     except(def(A, #{}), X);
 op(_, {'=', X}) ->
     X;
+op(A, {def, X}) ->
+    def(A, X);
 op(A, {addnew, X}) ->
     update(X, deflike(A, X));
 op(A, {update, X}) ->
@@ -266,6 +271,8 @@ op(A, {prepend, X}) ->
     X ++ def(A, []);
 op(A, {cons, H}) ->
     [H|def(A, [])];
+op(A, {init, H}) ->
+    init(A, H);
 op(A, {drop, H}) ->
     drop(def(A, []), H);
 op(A, {push, H}) ->
@@ -384,6 +391,19 @@ getdef(Maybe, Key) ->
 
 getdef(Maybe, Key, Default) ->
     get(def(Maybe, []), Key, Default).
+
+getone(List) ->
+    getone(List, undefined).
+
+getone([{Obj, Key}|Rest], Default) ->
+    case get(Obj, Key) of
+        undefined ->
+            getone(Rest, Default);
+        Val ->
+            Val
+    end;
+getone([], Default) ->
+    Default.
 
 setdef(Maybe, Key, Val) ->
     setdef(Maybe, Key, Val, []).
@@ -634,6 +654,13 @@ tail([_|T]) ->
     T;
 tail([]) ->
     undefined.
+
+init(undefined, H) ->
+    [H];
+init([], H) ->
+    [H];
+init(List, _) ->
+    List.
 
 drop([H|T], H) ->
     T;
