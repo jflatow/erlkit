@@ -20,6 +20,7 @@
          ok/1,
          ok/2,
          op/2,
+         bump/2,
          def/2,
          delete/2,
          get/2,
@@ -95,7 +96,6 @@
          enum/2,
          enum/3,
          fold/3,
-         item/2,
          iter/1,
          join/2,
          join/3,
@@ -119,15 +119,20 @@
          skip/2,
          wrap/3]).
 
+atom(Atom) when is_atom(Atom) ->
+    Atom;
 atom(Any) ->
-    atom(Any, false).
+    list_to_atom(list(Any)).
 
 atom(Atom, _) when is_atom(Atom) ->
     Atom;
-atom(Else, true) ->
-    list_to_existing_atom(list(Else));
-atom(Else, false) ->
-    list_to_atom(list(Else)).
+atom(Else, Default) ->
+    try
+        list_to_existing_atom(list(Else))
+    catch
+        error:badarg ->
+            Default
+    end.
 
 list(List) when is_list(List) ->
     List;
@@ -255,6 +260,8 @@ op(A, {'-', X}) ->
     except(def(A, #{}), X);
 op(_, {'=', X}) ->
     X;
+op(A, {bump, Op}) ->
+    bump(def(A, {0, undefined}), Op);
 op(A, {def, X}) ->
     def(A, X);
 op(A, {addnew, X}) ->
@@ -283,6 +290,9 @@ op(A, {Fun, X}) when is_function(Fun) ->
     Fun(A, X);
 op(A, {M, F, X}) ->
     M:F(A, X).
+
+bump({N, V}, Op) ->
+    {N + 1, op(V, Op)}.
 
 def(undefined, Default) ->
     Default;
@@ -672,8 +682,11 @@ push(List = [H|_], H) ->
 push(List, H) ->
     [H|List].
 
+both(Obj, Path) ->
+    {lookup(Obj, Path), Obj}.
+
 default(Obj, Path, Default) ->
-    item(create(Obj, Path, Default), Path).
+    both(create(Obj, Path, Default), Path).
 
 delta(A, B) ->
     fold(fun (Item, Delta) ->
@@ -726,9 +739,6 @@ fold(Fun, Acc, List) when is_list(List) ->
     lists:foldl(Fun, Acc, List);
 fold(Fun, Acc, {Mod, Obj}) when is_atom(Mod) ->
     Mod:fold(Fun, Acc, Obj).
-
-item(Obj, Path) ->
-    {lookup(Obj, Path), Obj}.
 
 iter(Map) when is_map(Map) ->
     maps:to_list(Map);

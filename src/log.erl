@@ -8,7 +8,7 @@
               entry/0]).
 
 -opaque log() :: pid().
--opaque ref() :: {binary(), binary()}.
+-opaque ref() :: {binary(), integer()}.
 -type mark() :: ref() | undefined.
 -type range() :: {mark(), mark()}.
 -type entry() :: {range(), binary()}.
@@ -41,11 +41,8 @@
          int_to_path/3,
          path_to_int/2,
          path_to_int/3,
-         id_to_str/1,
-         id_to_str/2,
-         str_to_id/1,
-         tag/1,
-         untag/1]).
+         mark_to_json/1,
+         json_to_mark/1]).
 
 -behavior(gen_server).
 -export([init/1,
@@ -64,10 +61,8 @@
 open(Root) ->
     open(Root, []).
 
-open(Root, Opts) when is_binary(Root) ->
-    open(binary_to_list(Root), Opts);
 open(Root, Opts) ->
-    gen_server:start_link(?MODULE, [Root, Opts], []).
+    gen_server:start_link(?MODULE, [str(Root), Opts], []).
 
 close(Log) ->
     gen_server:call(Log, {do, close}).
@@ -176,7 +171,7 @@ since(Log, Id, Opts) ->
 
 marker(Log, Fun, IO) ->
     marker:new(fun ({{mark, Mark}, Data}) ->
-                       {{_, Next}, D} = log:bendl(Log, Fun, Data, {Mark, undefined}),
+                       {{_, Next}, D} = bendl(Log, Fun, Data, {Mark, undefined}),
                        {{mark, Next}, D}
                end, marker:io(IO)).
 
@@ -255,40 +250,23 @@ path_to_int(Path, Depth, Base) ->
                                    {Pow div Unit, Int + list_to_integer(B, Base) * Pow}
                            end, {num:pow(Unit, Depth - 1), 0}, filename:split(Path))).
 
-id_to_str(Id) ->
-    id_to_str(Id, "+").
+mark_to_json(undefined) ->
+    null;
+mark_to_json({Rel, Pos}) ->
+    [Rel, Pos].
 
-id_to_str(undefined, Inf) ->
-    Inf;
-id_to_str({Rel, Offs}, _) ->
-    str:format("~s:~25.36.0B", [str:replace(Rel, $/, $.), Offs]).
-
-str_to_id(Str) when is_list(Str) ->
-    str_to_id(util:bin(Str));
-str_to_id(Bin) when size(Bin) =:= 1 ->
+json_to_mark(null) ->
     undefined;
-str_to_id(Bin) ->
-    case binary:split(Bin, <<":">>) of
-        [Rel, Offs] ->
-            {str:replace(str(Rel), $., $/), list_to_integer(str(Offs), 36)}
-    end.
-
-tag({A, B}) ->
-    str:format("~s-~s", [id_to_str(A), id_to_str(B, "=")]).
-
-untag(Tag) ->
-    case binary:split(util:bin(Tag), <<"-">>) of
-        [A, B] ->
-            {str_to_id(A), str_to_id(B)}
-    end.
+json_to_mark([Rel, Pos]) ->
+    {Rel, Pos}.
 
 rel(Root, Path) ->
     str:strip(str:disfix(str(Root), str(Path)), $/).
 
-str(List) when is_list(List) ->
-    List;
 str(Bin) when is_binary(Bin) ->
-    binary_to_list(Bin).
+    Bin;
+str(List) when is_list(List) ->
+    list_to_binary(List).
 
 lower(#state{root=Root}, undefined) ->
     {rel(Root, path:head(Root)), ?OZero};

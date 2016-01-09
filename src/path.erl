@@ -55,6 +55,10 @@ foldl(_, _, {stop, Acc}, _, _) ->
     Acc;
 foldl(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
     foldl([binary_to_list(Path)], Fun, Acc, Bounds, Order);
+foldl(Path, Fun, Acc, {Lower, Upper}, Order) when is_binary(Lower) ->
+    foldl(Path, Fun, Acc, {binary_to_list(Lower), Upper}, Order);
+foldl(Path, Fun, Acc, {Lower, Upper}, Order) when is_binary(Upper) ->
+    foldl(Path, Fun, Acc, {Lower, binary_to_list(Upper)}, Order);
 foldl([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
     foldl([Path], Fun, Acc, Bounds, Order);
 foldl([], _, Acc, _, _) ->
@@ -95,6 +99,10 @@ foldr(_, _, {stop, Acc}, _, _) ->
     Acc;
 foldr(Path, Fun, Acc, Bounds, Order) when is_binary(Path) ->
     foldr([binary_to_list(Path)], Fun, Acc, Bounds, Order);
+foldr(Path, Fun, Acc, {Lower, Upper}, Order) when is_binary(Lower) ->
+    foldr(Path, Fun, Acc, {binary_to_list(Lower), Upper}, Order);
+foldr(Path, Fun, Acc, {Lower, Upper}, Order) when is_binary(Upper) ->
+    foldr(Path, Fun, Acc, {Lower, binary_to_list(Upper)}, Order);
 foldr([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
     foldr([Path], Fun, Acc, Bounds, Order);
 foldr([], _, Acc, _, _) ->

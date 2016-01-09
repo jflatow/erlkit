@@ -29,6 +29,7 @@
 -import(util, [hexdigit/1,
                unhexdigit/1]).
 
+-define(EMPTY(V), (V =:= undefined orelse V =:= <<>>)).
 -define(UNRESERVED(C), ((C >= $A andalso C =< $Z) orelse
                         (C >= $a andalso C =< $z) orelse
                         (C >= $0 andalso C =< $9) orelse
@@ -94,77 +95,81 @@ parse(fragment, <<>>, URL, Buf) ->
 format(URL) ->
     format(scheme, URL, <<>>).
 
-format(scheme, URL = #{scheme := Scheme}, Acc) when Scheme =/= undefined ->
+format(scheme, URL = #{scheme := Scheme}, Acc) when not ?EMPTY(Scheme) ->
     format(authority, URL, <<Acc/bits, Scheme/bits, $:>>);
 format(scheme, URL, Acc) ->
     format(authority, URL, Acc);
 
-format(authority, URL = #{authority := Authority}, Acc) when Authority =/= undefined ->
+format(authority, URL = #{authority := Authority}, Acc) when not ?EMPTY(Authority) ->
     format(path, URL, <<Acc/bits, "//", Authority/bits>>);
 format(authority, URL, Acc) ->
     format(path, URL, Acc);
 
-format(path, URL = #{path := Path}, Acc) when Path =/= undefined ->
+format(path, URL = #{path := Path}, Acc) when not ?EMPTY(Path) ->
     format(query, URL, <<Acc/bits, Path/bits>>);
 format(path, URL, Acc) ->
     format(query, URL, Acc);
 
-format(query, URL = #{query := Query}, Acc) when Query =/= undefined ->
+format(query, URL = #{query := Query}, Acc) when not ?EMPTY(Query) ->
     format(fragment, URL, <<Acc/bits, $?, Query/bits>>);
 format(query, URL, Acc) ->
     format(fragment, URL, Acc);
 
-format(fragment, #{fragment := Fragment}, Acc) when Fragment =/= undefined ->
+format(fragment, #{fragment := Fragment}, Acc) when not ?EMPTY(Fragment) ->
     <<Acc/bits, $#, Fragment/bits>>;
 format(fragment, _, Acc) ->
     Acc.
 
 rd(Field, URL) when not is_map(URL) ->
     rd(Field, parse(URL));
-rd(path, URL) ->
+rd(p, URL) ->
     filename:split(util:defget(URL, path, <<>>));
-rd(query, URL) ->
+rd(q, URL) ->
     decode(util:defget(URL, query, <<>>));
-rd(fragment, URL) ->
+rd(f, URL) ->
     decode(util:defget(URL, fragment, <<>>));
 rd(Field, URL) ->
     util:get(URL, Field).
 
+up(URL, Opts) when not is_map(URL) ->
+    up(parse(URL), Opts);
 up(URL, Opts) ->
-    lists:foldl(fun ({F, V}, U) -> up(F, U, V) end, URL, Opts).
+    util:fold(fun ({F, V}, U) -> up(F, U, V) end, URL, Opts).
 
 up(Field, URL, Value) when not is_map(URL) ->
     up(Field, parse(URL), Value);
 up(_, URL, undefined) ->
     URL;
-up(path, URL, Parts) ->
+up(p, URL, Parts) ->
     URL#{path => filename:join([<<$/>>|Parts])};
-up(query, URL, Params) ->
+up(q, URL, Params) ->
     URL#{query => enc(Params)};
-up(fragment, URL, Params) ->
-    URL#{fragment => enc(Params)}.
+up(f, URL, Params) ->
+    URL#{fragment => enc(Params)};
+up(Field, URL, Value) ->
+    URL#{Field => Value}.
 
-p(URL, Parts) -> format(up(path, URL, Parts)).
-q(URL, Params) -> format(up(query, URL, Params)).
-f(URL, Params) -> format(up(fragment, URL, Params)).
+p(URL, Parts) -> format(up(p, URL, Parts)).
+q(URL, Params) -> format(up(q, URL, Params)).
+f(URL, Params) -> format(up(f, URL, Params)).
 u(URL, Opts) -> format(up(URL, Opts)).
-u(URL, P, Q) -> u(URL, [{path, P}, {query, Q}]).
-u(URL, P, Q, F) -> u(URL, [{path, P}, {query, Q}, {fragment, F}]).
+u(URL, P, Q) -> u(URL, [{p, P}, {q, Q}]).
+u(URL, P, Q, F) -> u(URL, [{p, P}, {q, Q}, {f, F}]).
 
 pz(URL, Parts) ->
-    p(URL, rd(path, URL) ++ Parts).
+    p(URL, rd(p, URL) ++ Parts).
 
 qu(URL, Params) ->
-    q(URL, util:update(rd(query, URL), Params)).
+    q(URL, util:update(rd(q, URL), Params)).
 
 qz(URL, Params) ->
-    q(URL, rd(query, URL) ++ util:iter(Params)).
+    q(URL, rd(q, URL) ++ util:iter(Params)).
 
 fu(URL, Params) ->
-    f(URL, util:update(rd(fragment, URL), Params)).
+    f(URL, util:update(rd(f, URL), Params)).
 
 fz(URL, Params) ->
-    f(URL, rd(fragment, URL) ++ util:iter(Params)).
+    f(URL, rd(f, URL) ++ util:iter(Params)).
 
 decode(<<>>) ->
     [];
