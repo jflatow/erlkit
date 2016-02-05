@@ -44,8 +44,6 @@
          defget/3,
          getdef/2,
          getdef/3,
-         getone/1,
-         getone/2,
          setdef/3,
          setdef/4,
          hasany/2,
@@ -64,6 +62,8 @@
          remove/3,
          swap/3,
          swap/4,
+         either/1,
+         either/2,
          except/2,
          filter/2,
          select/2,
@@ -108,7 +108,6 @@
          vals/2,
          index/1,
          index/2,
-         index/3,
          invert/1,
          invert/2,
          mapped/1,
@@ -250,14 +249,10 @@ op(A, {'*', X}) when is_number(X) ->
     def(A, 0) * X;
 op(A, {'/', X}) when is_number(X) ->
     def(A, 0) / X;
-op(A, {'+', X}) when is_list(X), (is_list(A) orelse A =:= undefined) ->
-    ordsets:union(def(A, []), lists:usort(X));
-op(A, {'-', X}) when is_list(X), (is_list(A) orelse A =:= undefined) ->
-    ordsets:subtract(def(A, []), lists:usort(X));
 op(A, {'+', X}) ->
-    update(def(A, #{}), X);
+    update(deflike(A, X), X);
 op(A, {'-', X}) ->
-    except(def(A, #{}), X);
+    except(deflike(A, X), X);
 op(_, {'=', X}) ->
     X;
 op(A, {bump, Op}) ->
@@ -402,19 +397,6 @@ getdef(Maybe, Key) ->
 getdef(Maybe, Key, Default) ->
     get(def(Maybe, []), Key, Default).
 
-getone(List) ->
-    getone(List, undefined).
-
-getone([{Obj, Key}|Rest], Default) ->
-    case get(Obj, Key) of
-        undefined ->
-            getone(Rest, Default);
-        Val ->
-            Val
-    end;
-getone([], Default) ->
-    Default.
-
 setdef(Maybe, Key, Val) ->
     setdef(Maybe, Key, Val, []).
 
@@ -499,7 +481,7 @@ create(Obj, Path, Initial) ->
     create(Obj, Path, Initial, []).
 
 create(Obj, Path, Initial, Opts) ->
-    swap(Obj, Path, Initial, set(Opts, match, fun (V) -> V =:= undefined end)).
+    swap(Obj, Path, Initial, set(Opts, match, get(Opts, match, fun (V) -> V =:= undefined end))).
 
 remove(Obj, []) ->
     Obj;
@@ -533,6 +515,19 @@ swap(Obj, Path, Swap, Opts) ->
         {false, _} = Tag ->
             wrap(Tag, Obj, get(Opts, wrapped))
     end.
+
+either(List) ->
+    either(List, undefined).
+
+either([{Obj, Path}|Rest], Default) ->
+    case lookup(Obj, Path) of
+        undefined ->
+            either(Rest, Default);
+        Val ->
+            Val
+    end;
+either([], Default) ->
+    Default.
 
 except(Map, Exclude) when is_map(Map) ->
     maps:without(keys(Exclude), Map);
@@ -808,13 +803,10 @@ vals(Iter, Filter) ->
     vals(Iter, fun (I) -> key(I) =:= Filter end).
 
 index(Obj) ->
-    index(Obj, deflike(undefined, Obj)).
+    index(Obj, fun invert/1).
 
-index(Obj, Acc) ->
-    index(Obj, Acc, fun invert/1).
-
-index(Obj, Acc, Inv) ->
-    fold(fun (I, A) -> set(A, Inv(I)) end, Acc, Obj).
+index(Obj, Inv) ->
+    fold(fun (I, A) -> [Inv(I)|A] end, [], Obj).
 
 invert(Item) ->
     invert(Item, fun val/1).
