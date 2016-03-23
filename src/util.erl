@@ -301,9 +301,7 @@ def(Value, _) ->
 delete(Map, Key) when is_map(Map) ->
     maps:remove(Key, Map);
 delete(List, Key) when is_list(List) ->
-    lists:filter(fun (I) -> key(I) =/= Key end, List);
-delete({Mod, Obj}, Key) ->
-    Mod:delete(Obj, Key).
+    lists:filter(fun (I) -> key(I) =/= Key end, List).
 
 get(Obj, Key) ->
     get(Obj, Key, undefined).
@@ -311,9 +309,7 @@ get(Obj, Key) ->
 get(Map, Key, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 get(List, Key, Default) when is_list(List) ->
-    first(List, fun (I) -> key(I) =:= Key end, fun val/1, Default);
-get({Mod, Obj}, Key, Default) when is_atom(Mod) ->
-    Mod:get(Obj, Key, Default).
+    first(List, fun (I) -> key(I) =:= Key end, fun val/1, Default).
 
 set(Obj, Item) ->
     set(Obj, key(Item), val(Item)).
@@ -328,9 +324,7 @@ set([H|T], Key, Val) ->
             [H|set(T, Key, Val)]
     end;
 set([], Key, Val) ->
-    [{Key, Val}];
-set({Mod, Obj}, Key, Val) when is_atom(Mod) ->
-    Mod:set(Obj, Key, Val).
+    [{Key, Val}].
 
 pop(Obj, Key) ->
     pop(Obj, Key, undefined).
@@ -341,9 +335,7 @@ pop(Obj, Key, Default) ->
 has(Map, Key) when is_map(Map) ->
     maps:is_key(Key, Map);
 has(List, Key) when is_list(List) ->
-    any(List, fun (I) -> key(I) =:= Key end);
-has({Mod, Obj}, Key) when is_atom(Mod) ->
-    Mod:has(Obj, Key).
+    any(List, fun (I) -> key(I) =:= Key end).
 
 map(Map, Fun) when is_map(Map) ->
     maps:fold(fun (Key, Val, Acc) ->
@@ -358,17 +350,17 @@ mutate(Obj, Key, Fun) ->
 mutate(Obj, Key, Fun, Initial) ->
     set(Obj, Key, Fun(get(Obj, Key, Initial))).
 
-decrement(Obj, Key) ->
-    decrement(Obj, Key, 1).
+decrement(Obj, Path) ->
+    decrement(Obj, Path, 1).
 
-decrement(Obj, Key, Num) ->
-    increment(Obj, Key, -Num).
+decrement(Obj, Path, Num) ->
+    increment(Obj, Path, -Num).
 
-increment(Obj, Key) ->
-    increment(Obj, Key, 1).
+increment(Obj, Path) ->
+    increment(Obj, Path, 1).
 
-increment(Obj, Key, Num) ->
-    mutate(Obj, Key, fun (V) -> V + Num end, 0).
+increment(Obj, Path, Num) ->
+    modify(Obj, Path, fun (V) -> def(V, 0) + Num end).
 
 deflike(A, B) when is_map(B) ->
     def(A, #{});
@@ -423,6 +415,8 @@ hasany(Obj, [Key|Keys]) ->
 hasany(_, []) ->
     false.
 
+exists(Obj = {Mod, _}, Path) ->
+    Mod:exists(Obj, Path);
 exists(_, []) ->
     true;
 exists(Obj, [Key|Path]) ->
@@ -438,6 +432,8 @@ exists(Obj, Key) ->
 lookup(Obj, Path) ->
     lookup(Obj, Path, undefined).
 
+lookup(Obj = {Mod, _}, Path, Default) when is_atom(Mod) ->
+    Mod:lookup(Obj, Path, Default);
 lookup(_, [], Default) ->
     Default;
 lookup(Obj, [Key], Default) ->
@@ -448,13 +444,13 @@ lookup(Obj, [Key|Path], Default) ->
             Default;
         Val ->
             lookup(Val, Path, Default)
-    end;
-lookup(Obj, Key, Default) ->
-    lookup(Obj, [Key], Default).
+    end.
 
 modify(Obj, Path, Fun) ->
     modify(Obj, Path, Fun, #{}).
 
+modify(Obj = {Mod, _}, Path, Fun, _) when is_atom(Mod) ->
+    Mod:modify(Obj, Path, Fun);
 modify(Obj, [], _, _) ->
     Obj;
 modify(Obj, [Key], Fun, Empty) when is_function(Fun) ->
@@ -462,9 +458,7 @@ modify(Obj, [Key], Fun, Empty) when is_function(Fun) ->
 modify(Obj, [Key], Val, Empty) ->
     setdef(Obj, Key, Val, Empty);
 modify(Obj, [Key|Path], Fun, Empty) ->
-    setdef(Obj, Key, modify(getdef(Obj, Key), Path, Fun, Empty), Empty);
-modify(Obj, Key, Fun, Empty) ->
-    modify(Obj, [Key], Fun, Empty).
+    setdef(Obj, Key, modify(getdef(Obj, Key), Path, Fun, Empty), Empty).
 
 accrue(Obj, Path, Change) ->
     accrue(Obj, Path, Change, fun op/2).
@@ -483,6 +477,8 @@ create(Obj, Path, Initial) ->
 create(Obj, Path, Initial, Opts) ->
     swap(Obj, Path, Initial, set(Opts, match, get(Opts, match, fun (V) -> V =:= undefined end))).
 
+remove(Obj = {Mod, _}, Path) ->
+    Mod:remove(Obj, Path);
 remove(Obj, []) ->
     Obj;
 remove(Obj, [Key]) ->
@@ -493,9 +489,7 @@ remove(Obj, [Key|Path]) ->
             Obj;
         Val ->
             set(Obj, Key, remove(Val, Path))
-    end;
-remove(Obj, Key) ->
-    remove(Obj, [Key]).
+    end.
 
 remove(Obj, Path, Opts) ->
     case match(lookup(Obj, Path), get(Opts, match, fun (_) -> true end)) of
@@ -732,7 +726,7 @@ fold(Fun, Acc, Map) when is_map(Map) ->
     maps:fold(fun (K, V, A) -> Fun({K, V}, A) end, Acc, Map);
 fold(Fun, Acc, List) when is_list(List) ->
     lists:foldl(Fun, Acc, List);
-fold(Fun, Acc, {Mod, Obj}) when is_atom(Mod) ->
+fold(Fun, Acc, Obj = {Mod, _}) when is_atom(Mod) ->
     Mod:fold(Fun, Acc, Obj).
 
 iter(Map) when is_map(Map) ->
