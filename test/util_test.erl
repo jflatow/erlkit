@@ -78,9 +78,9 @@ has_test() ->
     ?assertNot(hasany([], [x])).
 
 modify_test() ->
-    ?assertEqual(#{x => 1}, modify(#{}, x, fun (_) -> 1 end)),
-    ?assertEqual(#{x => 1}, modify(#{x => 3}, x, fun (_) -> 1 end)).
+    ?assertEqual(#{x => 1}, modify(#{}, [x], fun (_) -> 1 end)),
+    ?assertEqual(#{x => 1}, modify(#{x => 3}, [x], fun (_) -> 1 end)).
 
 remove_test() ->
-    ?assertEqual(#{}, remove(#{x => 1}, x)),
+    ?assertEqual(#{}, remove(#{x => 1}, [x])),
     ?assertEqual(#{x => []}, remove(#{x => [{2, v}]}, [x, 2])).

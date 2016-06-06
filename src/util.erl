@@ -21,6 +21,8 @@
          ok/2,
          op/2,
          bump/2,
+         item/2,
+         nil/1,
          def/2,
          delete/2,
          get/2,
@@ -257,6 +259,8 @@ op(_, {'=', X}) ->
     X;
 op(A, {bump, Op}) ->
     bump(def(A, {0, undefined}), Op);
+op(A, {item, N}) ->
+    item(A, N);
 op(A, {def, X}) ->
     def(A, X);
 op(A, {addnew, X}) ->
@@ -288,6 +292,22 @@ op(A, {M, F, X}) ->
 
 bump({N, V}, Op) ->
     {N + 1, op(V, Op)}.
+
+item(undefined, _) ->
+    undefined;
+item(Tuple, N) when is_tuple(Tuple) ->
+    element(N, Tuple);
+item(List, N) when is_list(List) ->
+    lists:nth(N, List).
+
+nil(Map) when is_map(Map) ->
+    #{};
+nil(List) when is_list(List) ->
+    [];
+nil(Num) when is_number(Num) ->
+    0;
+nil(Bin) when is_binary(Bin) ->
+    <<>>.
 
 def(undefined, Default) ->
     Default;
@@ -362,14 +382,8 @@ increment(Obj, Path) ->
 increment(Obj, Path, Num) ->
     modify(Obj, Path, fun (V) -> def(V, 0) + Num end).
 
-deflike(A, B) when is_map(B) ->
-    def(A, #{});
-deflike(A, B) when is_list(B) ->
-    def(A, []);
-deflike(A, B) when is_number(B) ->
-    def(A, 0);
-deflike(A, B) when is_binary(B) ->
-    def(A, <<>>).
+deflike(A, B) ->
+    def(A, nil(B)).
 
 defmin(A, B) ->
     min(def(A, B), def(B, A)).
@@ -451,8 +465,10 @@ modify(Obj, Path, Fun) ->
 
 modify(Obj = {Mod, _}, Path, Fun, _) when is_atom(Mod) ->
     Mod:modify(Obj, Path, Fun);
-modify(Obj, [], _, _) ->
-    Obj;
+modify(Obj, [], Fun, _) when is_function (Fun) ->
+    Fun(Obj);
+modify(_, [], Val, _) ->
+    Val;
 modify(Obj, [Key], Fun, Empty) when is_function(Fun) ->
     setdef(Obj, Key, Fun(getdef(Obj, Key)), Empty);
 modify(Obj, [Key], Val, Empty) ->
@@ -480,7 +496,7 @@ create(Obj, Path, Initial, Opts) ->
 remove(Obj = {Mod, _}, Path) ->
     Mod:remove(Obj, Path);
 remove(Obj, []) ->
-    Obj;
+    nil(Obj);
 remove(Obj, [Key]) ->
     delete(Obj, Key);
 remove(Obj, [Key|Path]) ->

@@ -99,9 +99,6 @@ json_encode(F, _State) when is_float(F) ->
     num:digits(F);
 json_encode(S, State) when is_binary(S); is_atom(S) ->
     json_encode_string(S, State);
-json_encode([{K, _}|_] = Props, State) when (is_binary(K) orelse is_atom(K)),
-                                            (K =/= array andalso K =/= json) ->
-    json_encode_proplist(Props, State);
 json_encode(#{} = Map, State) ->
     json_encode_proplist(maps:to_list(Map), State);
 json_encode({}, State) ->
@@ -681,8 +678,6 @@ atom_test() ->
     ok.
 
 key_encode_test() ->
-    %% Some forms are accepted as keys that would not be strings in other
-    %% cases
     ?assertEqual(
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode(#{foo => 1}))),
@@ -693,10 +688,10 @@ key_encode_test() ->
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode(#{"foo" => 1}))),
 	?assertEqual(
-       <<"{\"foo\":1}">>,
+       <<"[[\"foo\",1]]">>,
        iolist_to_binary(encode([{foo, 1}]))),
     ?assertEqual(
-       <<"{\"foo\":1}">>,
+       <<"[[\"foo\",1]]">>,
        iolist_to_binary(encode([{<<"foo">>, 1}]))),
     ?assertEqual(
        <<"{\"\\ud834\\udd20\":1}">>,
