@@ -3,8 +3,6 @@
 -include_lib("eunit/include/eunit.hrl").
 
 marker_test() ->
-    ok = path:rmrf("marker"),
-    ok = path:rmrf("marker_test"),
     {ok, L} = log:open("marker_test"),
     M0 = log:marker(L, fun (I, A) -> [I|A] end, "marker"),
     {ok, _} = util:count(fun (I, _) -> log:write(L, util:bin(I)) end, {ok, undefined}, 1000),
@@ -15,4 +13,6 @@ marker_test() ->
     {_M, D2} = marker:run({M1, D1}),
     ?assertMatch(2000, length(D2)),
 
-    ok = log:close(L).
+    ok = log:close(L),
+    ok = path:rmrf("marker"),
+    ok = path:rmrf("marker_test").

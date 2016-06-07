@@ -1,4 +1,6 @@
+*.beam
+*.d
+*.plt
 deps/
 ebin/
-.eunit/
-.rebar/
+erlang.mk
