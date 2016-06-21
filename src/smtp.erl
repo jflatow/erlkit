@@ -3,190 +3,493 @@
 
 %% SMTP primitives (RFC 5321)
 
-%% generic tcp socket listen / close
--export([listener/1,
-         close/1,
-         close/2]).
+%% smtp types
+-export_type([command/0,
+              reply/0,
+              client/0,
+              server/0]).
 
-%% internal tcp socket helpers
--export([listen/1,
-         listen/2,
-         listen/3,
-         acceptor/2,
-         register/2,
-         register/3]).
+-type command() :: [string()].
+-type reply() :: [string()].
 
-%% smtp specific
--record(mta, {socket, handle, deliver, extensions, options, state}).
--export([mta/0,
-         mta/1,
-         mta_getopt/2,
-         mta_getopt/3,
-         mta_register/2,
-         mta_register/3]).
+-type client() :: tuple().
+-type options() :: #{}.
+-type socket() :: {gen_tcp | ssl, gen_tcp:socket() | ssl:sslsocket()}.
 
-%% internal mta / smtp helpers
--export([mta_accept/1,
-         mta_listen/1,
-         mta_respond/2,
-         mta_handle/2,
-         mta_default/3,
-         mta_forget/1,
-         mta_send/2,
-         mta_close/1,
-         mta_peername/1]).
+-type server() :: tuple().
+-type sstate() :: #{}.
+-type handler() :: fun((command(), sstate(), server()) ->
+                             {continue, reply(), sstate()} |
+                             {stop, reply(), term()} |
+                             default).
+-type deliver() :: fun((sstate(), server()) -> reply()).
 
--export([read_address/1,
+-record(client, {
+          extensions :: [string()],
+          options :: options(),
+          socket :: socket()
+         }).
+
+-record(server, {
+          extensions :: [string()],
+          handler :: handler(),
+          deliver :: deliver(),
+          options :: options(),
+          socket :: socket(),
+          state :: sstate()
+         }).
+
+%% high-level smtp
+-export([start_server/1,
+         stop_server/1,
+         domain_of/1,
+         locate_mx/1,
+         send_email/1,
+         send_email/2]).
+
+%% client / server options
+-export([getopt/2,
+         getopt/3,
+         hasext/2]).
+
+%% low-level smtp client
+-export([client/0,
+         client/1,
+         client_connect/1,
+         client_session/1,
+         client_quit/1,
+         client_send/2,
+         client_recv/2,
+         client_call/2,
+         client_multi/2,
+         client_multi/3,
+         client_email/2,
+         client_close/1,
+         client_error/2]).
+
+%% low-level smtp server
+-export([server/0,
+         server/1,
+         server_register/2,
+         server_register/3,
+         server_accept/1,
+         server_listen/1,
+         server_respond/2,
+         server_handle/2,
+         server_default/3,
+         server_reset/1,
+         server_send/2,
+         server_close/1]).
+
+%% smtp helpers
+-export([first_fail/1,
+         force_crlf/1,
+         strip_crlf/1,
+         read_address/1,
          read_command/1,
          read_from_to/1,
          read_data/1,
+         read_reply_line/1,
+         format_address/1,
+         format_command/1,
          format_reply/1]).
 
-%% generic tcp
+%% generic dns lookup
+-export([dns_lookup/3]).
 
-listener(Port) ->
-    spawn_link(fun () -> listen(Port) end).
+%% generic tcp helpers
+-export([tcp_connect/3,
+         tcp_connect/4,
+         tcp_listener/1,
+         tcp_listen/1,
+         tcp_listen/2,
+         tcp_listen/3,
+         tcp_deafen/1,
+         tcp_deafen/2,
+         tcp_acceptor/2,
+         tcp_register/2,
+         tcp_register/3,
+         tcp_sockname/1,
+         tcp_peername/1]).
 
-listen(Port) ->
-    listen(Port, [binary, {active, false}, {packet, line}, {send_timeout_close, true}]).
+%% high-level smtp
 
-listen(Port, Options) ->
-    listen(Port, Options, gen_tcp:listen(Port, Options)).
-
-listen(Port, Options, {ok, Socket}) ->
-    receive
-        {register, From, Ref, Fun} ->
-            From ! {Ref, acceptor(Socket, Fun)},
-            listen(Port, Options, {ok, Socket});
-        {close, Reason} ->
-            gen_tcp:close(Socket),
-            exit(Reason)
-    end;
-listen(_Port, _Options, Error) ->
-    exit({listen, Error}).
-
-repeater(Fun) ->
-    spawn_link(fun () -> repeat(Fun) end).
-
-repeat(Fun) ->
-    Fun(), repeat(Fun).
-
-acceptor(Socket, Fun) ->
-    repeater(fun () -> Fun(gen_tcp:accept(Socket)) end).
-
-register(Listener, Fun) ->
-    register(Listener, Fun, infinity).
-
-register(Listener, Fun, Timeout) ->
-    Ref = make_ref(),
-    Listener ! {register, self(), Ref, Fun},
-    receive
-        {Ref, Acceptor} ->
-            {ok, Acceptor}
-    after Timeout ->
-            {error, timeout}
+domain_of(Addr) ->
+    case smtp:read_address(format_address(Addr)) of %% XXX
+        undefined ->
+            undefined;
+        {{_, Domain}, _} ->
+            Domain
     end.
 
-close(Listener) ->
-    close(Listener, normal).
+locate_mx(Domain) ->
+    locate_mx(Domain, 100).
 
-close(Listener, Reason) ->
-    Listener ! {close, Reason}.
+locate_mx(Domain, N) when is_list(Domain) ->
+    case dns_lookup(Domain, [in], [mx, cname]) of
+        [] ->
+            [{0, Domain}];
+        [{_, _}|_] = MXs ->
+            lists:sort(MXs);
+        [CName] when N > 0 ->
+            locate_mx(CName, N - 1);
+        _ ->
+            []
+    end;
+locate_mx(Domain, N) ->
+    locate_mx(util:str(Domain), N).
 
-%% smtp specific
+send_email(Desc) ->
+    send_email(Desc, #{}).
 
-mta() ->
-    mta(#{}).
+send_email(Desc, Client = #client{options=#{host := _}}) ->
+    case client_session(Client) of
+        {ok, _, C1} ->
+            case client_email(C1, Desc) of
+                {ok, Replies, C2} ->
+                    {ok, Replies, client_quit(C2)};
+                {retry, Replies, C2} ->
+                    {retry, Replies, client_quit(C2)};
+                {error, _, _} = Error ->
+                    Error
+            end;
+        {error, _, _} = Error ->
+            Error
+    end;
+send_email(Desc = {_From, [To|_], _Content}, Client = #client{options=O}) ->
+    case locate_mx(domain_of(To)) of
+        [] ->
+            {error, {mx, To}, Client};
+        [{_, MX}|_] ->
+            send_email(Desc, Client#client{options=O#{host => MX}})
+    end;
+send_email(Desc, Conf) ->
+    send_email(Desc, client(Conf)).
 
-mta(Conf) when is_function(Conf) ->
-    #mta{handle=Conf(handle, fun (_, _, _) -> default end),
-         deliver=Conf(deliver, fun (_) -> {"550", "5.3.2 Not configured"} end),
-         extensions=Conf(extensions, ["8BITMIME", "PIPELINING", "SMTPUTF8", "STARTTLS"]),
-         options=Conf(options, #{}),
-         state=Conf(state, #{})};
-mta(Conf) ->
-    mta(fun (K, D) -> util:get(Conf, K, D) end).
+start_server(Server = #server{}) ->
+    start_server(Server, getopt(Server, port));
+start_server(Conf) ->
+    start_server(server(Conf)).
 
-mta_getopt(MTA, accept_timeout) ->
-    mta_getopt(MTA, accept_timeout, 5 * 1000);
-mta_getopt(MTA, client_timeout) ->
-    mta_getopt(MTA, client_timeout, 5 * 60 * 1000);
-mta_getopt(MTA, starttls_timeout) ->
-    mta_getopt(MTA, starttls_timeout, 5 * 60 * 1000);
-mta_getopt(MTA, ssl_options) ->
-    mta_getopt(MTA, ssl_options, []);
-mta_getopt(MTA, Key) ->
-    mta_getopt(MTA, Key, undefined).
+start_server(Server, Port) ->
+    start_server(Server, Port, getopt(Server, num_acceptors)).
 
-mta_getopt(#mta{options=Options}, Key, Default) ->
+start_server(Server, Port, NumAcceptors) ->
+    Listener = tcp_listener(Port),
+    _Acceptors = util:count(
+                   fun (_, A) ->
+                           [server_register(Server, Listener)|A]
+                   end, [], NumAcceptors),
+    {ok, Listener}.
+
+stop_server(Listener) when is_pid(Listener) ->
+    tcp_deafen(Listener, stop), ok.
+
+%% options
+
+getopt(Any, self) ->
+    getopt(Any, self, localhost());
+getopt(Any, port) ->
+    getopt(Any, port, 25);
+getopt(Any, ssl_options) ->
+    getopt(Any, ssl_options, []);
+
+getopt(Client = #client{}, host) ->
+    getopt(Client, host, localhost());
+getopt(Client = #client{}, starttls) ->
+    getopt(Client, starttls, false);
+getopt(Client = #client{}, {connect, timeout}) ->
+    getopt(Client, {connect, timeout}, 10 * 1000);
+getopt(Client = #client{}, {"DATA", timeout}) ->
+    getopt(Client, {"DATA", timeout}, 2 * 60 * 1000);
+getopt(Client = #client{}, {data, timeout}) ->
+    getopt(Client, {data, timeout}, 10 * 60 * 1000);
+getopt(Client = #client{}, {Verb, timeout}) ->
+    getopt(Client, {Verb, timeout}, 5 * 60 * 1000);
+
+getopt(Server = #server{}, num_acceptors) ->
+    getopt(Server, num_acceptors, 16);
+getopt(Server = #server{}, {accept, timeout}) ->
+    getopt(Server, {accept, timeout}, 5 * 1000);
+getopt(Server = #server{}, {client, timeout}) ->
+    getopt(Server, {client, timeout}, 5 * 60 * 1000);
+getopt(Server = #server{}, {starttls, timeout}) ->
+    getopt(Server, {starttls, timeout}, 5 * 60 * 1000);
+
+getopt(Any, Key) ->
+    getopt(Any, Key, undefined).
+
+getopt(#client{options=Options}, Key, Default) ->
+    util:get(Options, Key, Default);
+getopt(#server{options=Options}, Key, Default) ->
     util:get(Options, Key, Default).
 
-mta_register(Listener, MTA) ->
-    mta_register(Listener, MTA, mta_getopt(MTA, accept_timeout)).
+hasext(#client{extensions=Extensions}, Key) ->
+    hasext(Extensions, Key);
+hasext(#server{extensions=Extensions}, Key) ->
+    hasext(Extensions, Key);
+hasext(Extensions, Key) ->
+    util:has(util:def(Extensions, []), Key).
 
-mta_register(Listener, MTA, Timeout) ->
-    register(Listener,
-             fun ({ok, Socket}) ->
-                     mta_accept(MTA#mta{socket={gen_tcp, Socket}});
-                 ({error, closed}) ->
-                     exit(normal);
-                 ({error, timeout}) ->
-                     exit(normal);
-                 ({error, Reason}) ->
-                     exit(Reason)
-             end, Timeout).
+%% low-level smtp client
 
-mta_accept(MTA) ->
-    mta_respond(greet, MTA).
+client() ->
+    client(#{}).
 
-mta_listen(#mta{socket={Module, Socket}} = MTA) ->
-    mta_respond(Module:recv(Socket, 0, mta_getopt(MTA, client_timeout)), MTA).
+client(Conf) when is_function(Conf) ->
+    #client{options=Conf(options, #{})};
+client(Conf) ->
+    client(fun (K, D) -> util:get(Conf, K, D) end).
 
-mta_respond(Message, MTA) ->
-    case mta_handle(Message, MTA) of
-        {continue, Reply, NewMTA = #mta{}} ->
-            mta_listen(mta_send(Reply, NewMTA));
+client_connect(Client = #client{}) ->
+    client_connect(Client, getopt(Client, host));
+client_connect(Conf) ->
+    client_connect(client(Conf)).
+
+client_connect(Client = #client{}, Host) ->
+    client_connect(Client, Host, getopt(Client, port)).
+
+client_connect(Client, Host, Port) ->
+    client_connect(Client, Host, Port, getopt(Client, {connect, timeout})).
+
+client_connect(Client, Host, Port, Timeout) ->
+    case tcp_connect(Host, Port, Timeout) of
+        {ok, Socket} ->
+            client_recv(Client#client{socket={gen_tcp, Socket}}, [greet]);
+        {error, Reason} ->
+            {error, {connect, Reason}, Client}
+    end.
+
+client_session(Client) ->
+    case client_connect(Client) of
+        {ok, ["220"|_], C1} ->
+            StartTLS = getopt(C1, starttls),
+            case client_hello(C1) of
+                {ok, ["250"|_], C2} when StartTLS ->
+                    client_starttls(C2);
+                {_, _, _} = Other ->
+                    Other
+            end;
+        {ok, Reply, C1} ->
+            client_error(C1, {greet, Reply});
+        {error, _, _} = Error ->
+            Error
+    end.
+
+client_hello(Client) ->
+    case client_call(Client, ["EHLO", getopt(Client, self)]) of
+        {ok, ["250"|_], _} = Result ->
+            Result;
+        {ok, [Code|_], C1} when Code =:= "502"; Code =:= "550" ->
+            case client_call(C1, ["HELO", getopt(Client, self)]) of
+                {ok, ["250"|_], _} = Result ->
+                    Result;
+                {ok, Reply, C2} ->
+                    client_error(C2, {helo, Reply});
+                {error, _, _} = Error ->
+                    Error
+            end;
+        {ok, Reply, C1} ->
+            client_error(C1, {ehlo, Reply});
+        {error, _, _} = Error ->
+            Error
+    end.
+
+client_starttls(Client) ->
+    SSLOptions = getopt(Client, ssl_options),
+    StartTLSTimeout = getopt(Client, {starttls, timeout}),
+    case hasext(Client, "STARTTLS") of
+        true ->
+            case client_call(Client, ["STARTTLS"]) of
+                {ok, ["220"|_], C1 = #client{socket={_Module, Socket}}} ->
+                    case ssl:connect(Socket, SSLOptions, StartTLSTimeout) of
+                        {ok, SSLSocket} ->
+                            client_hello(C1#client{socket={ssl, SSLSocket}});
+                        {error, Reason} ->
+                            client_error(C1, {ssl_connect, Reason})
+                        end;
+                {ok, Reply, C1} ->
+                    client_error(C1, {starttls, Reply});
+                {error, _, _} = Error ->
+                    Error
+            end;
+        false ->
+            Client
+    end.
+
+client_quit(Client) ->
+    client_close(client_send(Client, ["QUIT"])).
+
+client_send(Client = #client{socket={Module, Socket}}, Command) ->
+    Module:send(Socket, format_command(Command)),
+    Client.
+
+client_recv(Client, Command = [Verb|_]) ->
+    client_recv(Client, Command, getopt(Client, {Verb, timeout})).
+
+client_recv(Client, Command = [Verb|_], Timeout) ->
+    case client_pile(Client, Timeout, []) of
+        Reply = [_, _|Extensions] when Verb =:= "EHLO" ->
+            {ok, Reply, Client#client{extensions=[util:str(E) || E <- Extensions]}};
+        Reply when is_list(Reply) ->
+            {ok, Reply, Client};
+        {error, Reason} ->
+            client_error(Client, {Command, Reason})
+    end.
+
+client_pile(Client = #client{socket={Module, Socket}}, Timeout, Acc) ->
+    case Module:recv(Socket, 0, Timeout) of
+        {ok, Packet} ->
+            case read_reply_line(Packet) of
+                {_, Text, more} ->
+                    client_pile(Client, Timeout, [Text|Acc]);
+                {Code, Text} ->
+                    [Code|lists:reverse([Text|Acc])]
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+client_call(Client, Command) ->
+    client_recv(client_send(Client, Command), Command).
+
+client_multi(Client, Commands) ->
+    client_multi(Client, Commands,
+                 case hasext(Client, "PIPELINING") of
+                     true ->
+                         pipeline;
+                     false ->
+                         sequence
+                 end).
+
+client_multi(Client, Commands, sequence) ->
+    client_multi(Client, Commands, fun client_call/2);
+client_multi(Client, Commands, pipeline) ->
+    client_multi(util:reduce(fun client_send/2, Client, Commands), Commands, fun client_recv/2);
+client_multi(Client, Commands, Fun) when is_function(Fun) ->
+    lists:foldl(
+      fun (Command, {ok, Replies, C}) ->
+              case Fun(C, Command) of
+                  {ok, Reply, C1} ->
+                      {ok, [Reply|Replies], C1};
+                  {error, Reason, C1} ->
+                      {error, [Reason|Replies], C1}
+              end;
+          (_Command, Error) ->
+              Error
+      end, {ok, [], Client}, Commands).
+
+client_email(Client, {From, To, Content}) ->
+    case client_multi(Client,
+                      [["RSET"],
+                       ["MAIL", ["FROM:", format_address(From)]]|
+                      [["RCPT", ["TO:", format_address(T)]] || T <- To] ++
+                      [["DATA"]]]) of
+        {ok, [["354"|_]|_] = Replies, C1} ->
+            case client_call(C1, [data, Content]) of
+                {ok, ["250"|_] = Reply, C2} ->
+                    {ok, [Reply|Replies], C2};
+                {error, _, _} = Error ->
+                    Error
+            end;
+        {ok, Replies, C1} ->
+            case first_fail(lists:reverse(Replies)) of
+                [[$4|_]|_] ->
+                    {retry, Replies, C1};
+                [[$5|_]|_] ->
+                    client_error(C1, {email, Replies})
+            end;
+        {error, _, _} = Error ->
+            Error
+    end.
+
+client_close(#client{socket={Module, Socket}} = Client) ->
+    Module:close(Socket),
+    Client.
+
+client_error(Client, Reason) ->
+    {error, Reason, client_close(Client)}.
+
+%% low-level smtp server
+
+server() ->
+    server(#{}).
+
+server(Conf) when is_function(Conf) ->
+    #server{extensions=Conf(extensions, ["8BITMIME", "PIPELINING", "SMTPUTF8", "STARTTLS"]),
+            handler=Conf(handler, fun (_, _, _) -> default end),
+            deliver=Conf(deliver, fun (_, _) -> ["550", "5.3.2 Not configured"] end),
+            options=Conf(options, #{}),
+            state=Conf(state, #{})};
+server(Conf) ->
+    server(fun (K, D) -> util:get(Conf, K, D) end).
+
+server_register(Server, Listener) ->
+    server_register(Server, Listener, getopt(Server, {accept, timeout})).
+
+server_register(Server, Listener, Timeout) ->
+    tcp_register(Listener,
+                 fun ({ok, Socket}) ->
+                         server_accept(Server#server{socket={gen_tcp, Socket}});
+                     ({error, closed}) ->
+                         exit(normal);
+                     ({error, timeout}) ->
+                         exit(normal);
+                     ({error, Reason}) ->
+                         exit(Reason)
+                 end, Timeout).
+
+server_accept(Server) ->
+    server_respond(greeting, Server).
+
+server_listen(#server{socket={Module, Socket}} = Server) ->
+    server_respond(Module:recv(Socket, 0, getopt(Server, {client, timeout})), Server).
+
+server_respond(Message, Server) ->
+    case server_handle(Message, Server) of
+        {continue, Reply, NewServer = #server{}} ->
+            server_listen(server_send(NewServer, Reply));
         {continue, Reply, NewState} ->
-            mta_listen(mta_send(Reply, MTA#mta{state=NewState}));
+            server_listen(server_send(Server#server{state=NewState}, Reply));
         {stop, Reply, normal} ->
-            mta_close(mta_send(Reply, MTA));
+            server_close(server_send(Server, Reply));
         {stop, Reply, Reason} ->
-            mta_close(mta_send(Reply, MTA)),
+            server_close(server_send(Server, Reply)),
             exit(Reason)
     end.
 
-mta_handle({ok, Packet}, #mta{state=#{data := _Data}} = MTA) ->
-    mta_handle(read_data(Packet), MTA);
-mta_handle({ok, Packet}, MTA) ->
-    mta_handle(read_command(Packet), MTA);
-mta_handle(Received, #mta{handle=Handle, state=State} = MTA) ->
-    case Handle(Received, State, MTA) of
+server_handle({ok, Packet}, #server{state=#{content := _}} = Server) ->
+    server_handle(read_data(Packet), Server);
+server_handle({ok, Packet}, Server) ->
+    server_handle(read_command(Packet), Server);
+server_handle(Received, #server{handler=Handler, state=State} = Server) ->
+    case Handler(Received, State, Server) of
         default ->
-            mta_default(Received, State, MTA);
+            server_default(Received, State, Server);
         Result ->
             Result
     end.
 
-mta_default(greet, State, _MTA) ->
-    {continue, {"220", [hostname(), " ESMTP"]}, State};
+server_default(greeting, State, Server) ->
+    {continue, ["220", [getopt(Server, self), " ESMTP"]], State};
 
-mta_default({error, closed}, _State, _MTA) ->
-    {stop, {"221", "2.0.0 Closed by client, goodbye"}, normal};
-mta_default({error, timeout}, _State, _MTA) ->
-    {stop, {"451", "4.4.2 Took too long, goodbye"}, normal};
-mta_default({error, Reason}, _State, _MTA) ->
-    {stop, {"500", "5.0.0 Unexpected failure"}, Reason};
+server_default({error, closed}, _State, _Server) ->
+    {stop, ["221", "2.0.0 Closed by client, goodbye"], normal};
+server_default({error, timeout}, _State, _Server) ->
+    {stop, ["451", "4.4.2 Took too long, goodbye"], normal};
+server_default({error, Reason}, _State, _Server) ->
+    {stop, ["500", "5.0.0 Unexpected failure"], Reason};
 
-mta_default({"STARTTLS", _Params}, _State, MTA) ->
-    SSLOptions = mta_getopt(MTA, ssl_options),
-    StartTLSTimeout = mta_getopt(MTA, starttls_timeout),
+server_default(["STARTTLS"|_], _State, Server) ->
+    SSLOptions = getopt(Server, ssl_options),
+    StartTLSTimeout = getopt(Server, {starttls, timeout}),
     case util:hasall(SSLOptions, [certfile, keyfile]) of
         true ->
-            case mta_send({"220", "2.0.0 Ready"}, MTA) of
-                #mta{socket={_Module, Socket}} = NewMTA ->
+            case server_send(Server, ["220", "2.0.0 Ready"]) of
+                #server{socket={_Module, Socket}} = NewServer ->
                     case ssl:ssl_accept(Socket, SSLOptions, StartTLSTimeout) of
                         {ok, SSLSocket} ->
-                            {continue, noreply, mta_forget(NewMTA#mta{socket={ssl, SSLSocket}})};
+                            {continue, noreply, server_reset(NewServer#server{socket={ssl, SSLSocket}})};
                         {error, closed} ->
                             {stop, noreply, normal};
                         {error, timeout} ->
@@ -196,87 +499,91 @@ mta_default({"STARTTLS", _Params}, _State, MTA) ->
                     end
             end;
         false ->
-            {continue, {"454", "4.3.3 TLS keys not configured"}, MTA}
+            {continue, ["454", "4.3.3 TLS keys not configured"], Server}
     end;
 
-mta_default({"HELO", _Params}, State, _MTA) ->
-    {continue, {"250", hostname()}, State};
-mta_default({"EHLO", _Params}, State, #mta{extensions=Extensions}) ->
-    {continue, [{"250", [hostname(), " at your service"]}|
-                [{"250", Ext} || Ext <- Extensions]], State};
-mta_default({"QUIT", _Params}, _State, _MTA) ->
-    {stop, {"221", "2.0.0 Later"}, normal};
+server_default(["HELO"|_], State, Server) ->
+    {continue, ["250", getopt(Server, self)], server_reset(State)};
+server_default(["EHLO"|_], State, Server = #server{extensions=Extensions}) ->
+    {continue, ["250", [getopt(Server, self), " at your service"]|Extensions], server_reset(State)};
+server_default(["QUIT"|_], _State, _Server) ->
+    {stop, ["221", "2.0.0 Later"], normal};
 
-mta_default({"MAIL", Params}, State, _MTA) ->
-    case read_from_to(Params) of
+server_default(["MAIL", From|_], State, _Server) ->
+    case read_from_to(From) of
         {"FROM", {Address, _Rest}} ->
             Envelope = #{return_path => Address, recipients => [], size => 0},
-            {continue, {"250", "2.1.0 OK"}, State#{envelope => Envelope}};
+            {continue, ["250", "2.1.0 OK"], State#{envelope => Envelope}};
         _ ->
-            {continue, {"555", "5.5.3 Syntax error"}, State}
+            {continue, ["555", "5.5.3 Syntax error"], State}
     end;
-mta_default({"RCPT", Params}, #{envelope := #{size := Size} = Envelope} = State, _MTA) when Size < 100 ->
+server_default(["RCPT", To|_], #{envelope := #{size := Size} = Envelope} = State, _Server) when Size < 100 ->
     Recipients = util:get(Envelope, recipients, []),
-    case read_from_to(Params) of
+    case read_from_to(To) of
         {"TO", {Address, _Rest}} ->
             NewEnvelope = Envelope#{recipients => [Address|Recipients], size => Size + 1},
-            {continue, {"250", "2.1.5 OK"}, State#{envelope => NewEnvelope}};
+            {continue, ["250", "2.1.5 OK"], State#{envelope => NewEnvelope}};
         _ ->
-            {continue, {"555", "5.5.2 Syntax error"}, State}
+            {continue, ["555", "5.5.2 Syntax error"], State}
     end;
-mta_default({"RCPT", _Params}, #{envelope := _Envelope} = State, _MTA) ->
-    {continue, {"452", "4.5.2 Too many recipients"}, State};
-mta_default({"RCPT", _Params}, State, _MTA) ->
-    {continue, {"503", "5.5.1 MAIL first"}, State};
+server_default(["RCPT"|_], #{envelope := _Envelope} = State, _Server) ->
+    {continue, ["452", "4.5.2 Too many recipients"], State};
+server_default(["RCPT"|_], State, _Server) ->
+    {continue, ["503", "5.5.1 MAIL first"], State};
 
-mta_default({"DATA", _Params}, #{envelope := #{return_path := _ReturnPath,
-                                               recipients := [_|_]}} = State, _MTA) ->
-    {continue, {"354", "2.0.0 Go ahead"}, State#{data => <<>>}};
-mta_default({"DATA", _Params}, State, _MTA) ->
-    {continue, {"503", "5.5.1 MAIL and RCPT first"}, State};
+server_default(["DATA"|_], #{envelope := #{
+                                      return_path := _ReturnPath,
+                                      recipients := [_|_]}
+                                   } = State, _Server) ->
+    {continue, ["354", "2.0.0 Go ahead"], State#{content => <<>>}};
+server_default(["DATA"|_], State, _Server) ->
+    {continue, ["503", "5.5.1 MAIL and RCPT first"], State};
 
-mta_default({data, <<".\r\n">>}, State, #mta{deliver=Deliver} = MTA) ->
-    {continue, Deliver(State, MTA), maps:without([envelope, data], State)};
-mta_default({data, <<".", Line/binary>>}, #{data := Data} = State, _MTA) ->
-    {continue, noreply, State#{data => <<Data/binary, Line/binary>>}};
-mta_default({data, Line}, #{data := Data} = State, _MTA) ->
-    {continue, noreply, State#{data => <<Data/binary, Line/binary>>}};
+server_default([data, <<".\r\n">>], State, #server{deliver=Deliver} = Server) ->
+    {continue, Deliver(State, Server), maps:without([envelope, content], State)};
+server_default([data, <<".", Line/binary>>], #{content := Data} = State, _Server) ->
+    {continue, noreply, State#{content => <<Data/binary, Line/binary>>}};
+server_default([data,  Line], #{content := Data} = State, _Server) ->
+    {continue, noreply, State#{content => <<Data/binary, Line/binary>>}};
 
-mta_default({"NOOP", _Params}, State, _MTA) ->
-    {continue, {"250", "2.0.0 OK"}, State};
-mta_default({"RSET", _Params}, State, _MTA) ->
-    {continue, {"250", "2.0.0 Reset"}, maps:without([envelope], State)};
-mta_default({"VRFY", _Params}, State, _MTA) ->
-    {continue, {"252", "2.1.5 Send some mail, I'll try my best"}, State};
+server_default(["NOOP"|_], State, _Server) ->
+    {continue, ["250", "2.0.0 OK"], State};
+server_default(["RSET"|_], State, _Server) ->
+    {continue, ["250", "2.0.0 Reset"], server_reset(State)};
+server_default(["VRFY"|_], State, _Server) ->
+    {continue, ["252", "2.1.5 Send some mail, I'll try my best"], State};
 
-mta_default({_Verb, _Params}, State, _MTA) ->
-    {continue, {"502", "5.5.1 Unrecognized command"}, State}.
+server_default([_Verb|_Params], State, _Server) ->
+    {continue, ["502", "5.5.1 Unrecognized command"], State}.
 
-mta_forget(#mta{state=State} = MTA) ->
-    MTA#mta{state=maps:without([envelope, data], State)}.
+server_reset(#server{state=State} = Server) ->
+    Server#server{state=server_reset(State)};
+server_reset(#{} = State) ->
+    maps:without([envelope, content], State).
 
-mta_send(noreply, MTA) ->
-    MTA;
-mta_send(Reply, #mta{socket={Module, Socket}} = MTA) ->
+server_send(Server, noreply) ->
+    Server;
+server_send(#server{socket={Module, Socket}} = Server, Reply) ->
     Module:send(Socket, format_reply(Reply)),
-    MTA.
+    Server.
 
-mta_close(#mta{socket={Module, Socket}}) ->
-    Module:close(Socket).
+server_close(#server{socket={Module, Socket}} = Server) ->
+    Module:close(Socket),
+    Server.
 
-mta_peername(#mta{socket={gen_tcp, Socket}}) ->
-    inet:peername(Socket);
-mta_peername(#mta{socket={ssl, Socket}}) ->
-    ssl:peername(Socket).
+%% protocol helpers
 
-hostname() ->
-    util:ok(inet:gethostname()).
+localhost() ->
+    net_adm:localhost().
 
-strip_crlf(Data) ->
-    str:rstrip(str:rstrip(Data, $\n), $\r).
+first_fail(Replies) ->
+    util:first(Replies, fun ([[$2|_]|_]) -> false; (_) -> true end).
 
 force_crlf(Data) ->
     <<(strip_crlf(Data))/binary, $\r, $\n>>.
+
+strip_crlf(Data) ->
+    str:rstrip(str:rstrip(Data, $\n), $\r).
 
 read_address(<<$<, Data/binary>>) ->
     case Data of
@@ -304,18 +611,110 @@ read_address(<<>>, _Quoted, _Acc) ->
 
 read_command(Packet) ->
     {Verb, Params} = str:snap(strip_crlf(Packet), <<" ">>),
-    {str:upper(util:str(Verb)), Params}.
+    [str:upper(util:str(Verb)), Params].
 
 read_from_to(Params) ->
     {FromTo, Rest} = str:snap(strip_crlf(Params), <<":">>),
     {str:upper(util:str(FromTo)), read_address(Rest)}.
 
 read_data(Packet) ->
-    {data, force_crlf(Packet)}.
+    [data, force_crlf(Packet)].
 
-format_reply([{Code, String},Next|Rest]) when element(1, Next) =:= Code ->
-    [util:bin(Code), "-", String, "\r\n"|format_reply([Next|Rest])];
-format_reply([{Code, String}]) ->
-    [format_reply({Code, String})];
-format_reply({Code, String}) ->
-    [util:bin(Code), " ", String, "\r\n"].
+read_reply_line(<<Code:3/binary, "-", Text/binary>>) ->
+    {util:str(Code), strip_crlf(Text), more};
+read_reply_line(<<Packet/binary>>) ->
+    {Code, Text} = str:snap(strip_crlf(Packet), <<" ">>),
+    {util:str(Code), Text}.
+
+format_address({_Name, Address}) ->
+    format_address(Address);
+format_address(Address) ->
+    <<$<, (util:bin(Address))/binary, $>>>.
+
+format_command([data|Data]) ->
+    [util:join(Data, "\r\n"), "\r\n.\r\n"];
+format_command([Verb|Params]) ->
+    [util:join([Verb|Params], " "), "\r\n"].
+
+format_reply([Code, String]) ->
+    [util:bin(Code), " ", String, "\r\n"];
+format_reply([Code, String|Rest]) ->
+    [util:bin(Code), "-", String, "\r\n"|format_reply([Code|Rest])].
+
+%% generic dns
+
+dns_lookup(Name, Classes, Types) ->
+    case inet_res:resolve(Name, any, any) of
+        {ok, Msg} ->
+            [inet_dns:rr(RR, data)
+             || RR <- inet_dns:msg(Msg, anlist),
+                util:has(Types, inet_dns:rr(RR, type)),
+                util:has(Classes, inet_dns:rr(RR, class))];
+        {error, _} = Error ->
+            Error
+    end.
+
+%% generic tcp
+
+tcp_connect(Host, Port, Timeout) ->
+    tcp_connect(Host, Port, [binary, {active, false}, {packet, line}, {send_timeout_close, true}], Timeout).
+
+tcp_connect(Host, Port, Options, Timeout) ->
+    gen_tcp:connect(Host, Port, Options, Timeout).
+
+tcp_listener(Port) ->
+    spawn_link(fun () -> tcp_listen(Port) end).
+
+tcp_listen(Port) ->
+    tcp_listen(Port, [binary, {active, false}, {packet, line}, {send_timeout_close, true}]).
+
+tcp_listen(Port, Options) ->
+    tcp_listen(Port, Options, gen_tcp:listen(Port, Options)).
+
+tcp_listen(Port, Options, {ok, Socket}) ->
+    receive
+        {register, From, Ref, Fun} ->
+            From ! {Ref, tcp_acceptor(Socket, Fun)},
+            tcp_listen(Port, Options, {ok, Socket});
+        {close, Reason} ->
+            gen_tcp:close(Socket),
+            exit(Reason)
+    end;
+tcp_listen(_Port, _Options, {error, Reason}) ->
+    exit({error, {listen, Reason}}).
+
+tcp_deafen(Listener) ->
+    tcp_deafen(Listener, normal).
+
+tcp_deafen(Listener, Reason) ->
+    Listener ! {close, Reason}.
+
+tcp_acceptor(Socket, Fun) ->
+    proc:repeater(fun () -> Fun(gen_tcp:accept(Socket)) end).
+
+tcp_register(Listener, Fun) ->
+    tcp_register(Listener, Fun, infinity).
+
+tcp_register(Listener, Fun, Timeout) ->
+    Ref = make_ref(),
+    Listener ! {register, self(), Ref, Fun},
+    receive
+        {Ref, Acceptor} ->
+            {ok, Acceptor}
+    after Timeout ->
+            {error, timeout}
+    end.
+
+tcp_sockname({gen_tcp, Socket}) ->
+    inet:sockname(Socket);
+tcp_sockname({ssl, Socket}) ->
+    ssl:sockname(Socket);
+tcp_sockname(_) ->
+    undefined.
+
+tcp_peername({gen_tcp, Socket}) ->
+    inet:peername(Socket);
+tcp_peername({ssl, Socket}) ->
+    ssl:peername(Socket);
+tcp_peername(_) ->
+    undefined.

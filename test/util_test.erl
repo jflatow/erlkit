@@ -11,7 +11,8 @@
                hasall/2,
                hasany/2,
                modify/3,
-               remove/2]).
+               remove/2,
+               suppress/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -84,3 +85,14 @@ modify_test() ->
 remove_test() ->
     ?assertEqual(#{}, remove(#{x => 1}, [x])),
     ?assertEqual(#{x => []}, remove(#{x => [{2, v}]}, [x, 2])).
+
+suppress_test() ->
+    ?assertEqual(#{}, suppress(#{x => 1}, [x])),
+    ?assertEqual(#{x => []}, suppress(#{x => [{2, v}]}, [x, 2])),
+    ?assertEqual(#{x => []}, suppress(#{x => [{2, v}]}, [x, '*'])),
+    ?assertEqual(#{y => 1}, suppress(#{x => [{2, v}], y => 1}, [x])),
+    ?assertEqual(#{}, suppress(#{x => [{2, v}]}, ['*'])),
+    ?assertEqual(#{}, suppress(#{x => a, y => b}, [{'|', [[x], [y]]}])),
+    ?assertEqual(#{y => 1}, suppress(#{x => [{2, v}], y => 1}, [{'=', x}])),
+    ?assertEqual(#{x => [], y => 1}, suppress(#{x => [{{'=', k}, v}], y => 1}, [x, {'=', {'=', k}}])),
+    ?assertEqual(#{x => [#{y => []}, #{y => []}]}, suppress(#{x => [#{y => [{k, p}]}, #{y => [{k, q}]}]}, [x, '*', y, k])).

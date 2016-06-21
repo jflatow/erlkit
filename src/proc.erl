@@ -2,7 +2,8 @@
 -author("Jared Flatow").
 
 -export([lock/3,
-         untrap/2]).
+         untrap/2,
+         repeater/1]).
 
 lock(Key, Fun, Msg) ->
     case whereis(Key) of
@@ -27,3 +28,9 @@ untrap({'EXIT', _, Reason}, _) ->
     exit(Reason);
 untrap(_, Default) ->
     Default.
+
+repeater(Fun) ->
+    spawn_link(fun () -> repeat(Fun) end).
+
+repeat(Fun) ->
+    Fun(), repeat(Fun).

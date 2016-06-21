@@ -71,6 +71,7 @@
          select/2,
          insert/2,
          update/2,
+         suppress/2,
          all/2,
          any/2,
          chunk/2,
@@ -451,9 +452,9 @@ lookup(Obj = {Mod, _}, Path, Default) when is_atom(Mod) ->
 lookup(_, [], Default) ->
     Default;
 lookup(Obj, [Key], Default) ->
-    get(Obj, Key, Default);
+    getdef(Obj, Key, Default);
 lookup(Obj, [Key|Path], Default) ->
-    case get(Obj, Key) of
+    case getdef(Obj, Key) of
         undefined ->
             Default;
         Val ->
@@ -576,6 +577,27 @@ update(Old, New) when is_map(Old), is_map(New) ->
     maps:merge(Old, New);
 update(Old, New) ->
     reduce(fun insert/2, Old, New).
+
+suppress(Obj, ['*']) ->
+    nil(Obj);
+suppress(Obj, ['*'|Rest]) ->
+    fold(fun (T, A) when is_tuple(T) ->
+                 set(A, key(T), suppress(val(T), Rest));
+             (O, A) when is_list(A) ->
+                 lists:reverse([suppress(O, Rest)|A])
+         end, nil(Obj), Obj);
+suppress(Obj, [{'|', Choices}|Rest]) ->
+    fold(fun (C, A) -> suppress(A, C ++ Rest) end, Obj, Choices);
+suppress(Obj, [{'=', Literal}]) ->
+    remove(Obj, [Literal]);
+suppress(Obj, [{'=', Literal}|Rest]) ->
+    modify(Obj, [Literal], fun (O) -> suppress(O, Rest) end);
+suppress(Obj, [Literal]) ->
+    remove(Obj, [Literal]);
+suppress(Obj, [Literal|Rest]) ->
+    modify(Obj, [Literal], fun (O) -> suppress(O, Rest) end);
+suppress(Obj, []) ->
+    Obj.
 
 all(Map, Fun) when is_map(Map) ->
     all(maps:to_list(Map), Fun);
@@ -743,7 +765,9 @@ fold(Fun, Acc, Map) when is_map(Map) ->
 fold(Fun, Acc, List) when is_list(List) ->
     lists:foldl(Fun, Acc, List);
 fold(Fun, Acc, Obj = {Mod, _}) when is_atom(Mod) ->
-    Mod:fold(Fun, Acc, Obj).
+    Mod:fold(Fun, Acc, Obj);
+fold(_, Acc, undefined) ->
+    Acc.
 
 iter(Map) when is_map(Map) ->
     maps:to_list(Map);
