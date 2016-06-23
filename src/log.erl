@@ -5,28 +5,39 @@
               ref/0,
               mark/0,
               range/0,
+              event/0,
               entry/0]).
 
 -opaque log() :: pid().
 -opaque ref() :: {binary(), integer()}.
 -type mark() :: ref() | undefined.
 -type range() :: {mark(), mark()}.
--type entry() :: {range(), binary()}.
+-type event() :: {ok | nil, binary()} | binary().
+-type entry() :: {range(), event()}.
 
 -export([open/1,
          open/2,
          close/1,
+         purge/1,
          flush/1,
          locus/1,
+         zilch/1,
          write/2,
          write/3,
          annul/2,
          bendl/3,
          bendl/4,
          bendl/5,
+         bendr/3,
+         bendr/4,
+         bendr/5,
          foldl/3,
          foldl/4,
          foldl/5,
+         foldr/3,
+         foldr/4,
+         foldr/5,
+         foldx/5,
          limit/5,
          fetch/2,
          first/1,
@@ -35,7 +46,12 @@
          range/3,
          since/2,
          since/3,
-         marker/3]).
+         until/2,
+         until/3,
+         head/1,
+         head/2,
+         tail/1,
+         tail/2]).
 
 -export([int_to_path/2,
          int_to_path/3,
@@ -67,6 +83,9 @@ open(Root, Opts) ->
 close(Log) ->
     gen_server:call(Log, {do, close}).
 
+purge(Log) ->
+    gen_server:call(Log, {do, purge}).
+
 flush(Log) ->
     gen_server:call(Log, {do, flush}).
 
@@ -76,13 +95,19 @@ locus(Log) ->
             {Path, Offs}
     end.
 
-write(Log, Entry) ->
-    write(Log, Entry, call).
+zilch(Log) ->
+    case gen_server:call(Log, state) of
+        #state{path=Path} ->
+            {Path, ?OZero}
+    end.
 
-write(Log, Entry, call) ->
-    gen_server:call(Log, {do, {write, Entry}});
-write(Log, Entry, cast) ->
-    gen_server:cast(Log, {do, {write, Entry}}).
+write(Log, Event) ->
+    write(Log, Event, call).
+
+write(Log, Event, call) ->
+    gen_server:call(Log, {do, {write, Event}});
+write(Log, Event, cast) ->
+    gen_server:cast(Log, {do, {write, Event}}).
 
 annul(Log, {Rel, Offs}) ->
     case gen_server:call(Log, state) of
@@ -104,12 +129,24 @@ bendl(Log, Fun, Acc, Range) ->
     bendl(Log, Fun, Acc, Range, []).
 
 bendl(Log, Fun, Acc, {I1, _} = Range, Opts) ->
-    foldl(Log,
-          fun ({_, _}, {M, {stop, A}}) ->
-                  {stop, {M, A}};
-              ({M, _} = T, {_, A}) ->
-                  {M, Fun(T, A)}
-          end, {{I1, I1}, Acc}, Range, Opts).
+    bendx(Log, Fun, Acc, Range, Opts, {I1, I1}, fun foldl/5).
+
+bendr(Log, Fun, Acc) ->
+    bendr(Log, Fun, Acc, {undefined, undefined}).
+
+bendr(Log, Fun, Acc, Range) ->
+    bendr(Log, Fun, Acc, Range, []).
+
+bendr(Log, Fun, Acc, {_, I2} = Range, Opts) ->
+    bendx(Log, Fun, Acc, Range, Opts, {I2, I2}, fun foldr/5).
+
+bendx(Log, Fun, Acc, Range, Opts, Initial, Fold) ->
+    Fold(Log,
+         fun ({_, _}, {M, {stop, A}}) ->
+                 {stop, {M, A}};
+             ({M, _} = E, {_, A}) ->
+                 {M, Fun(E, A)}
+         end, {Initial, Acc}, Range, Opts).
 
 foldl(Log, Fun, Acc) ->
     foldl(Log, Fun, Acc, {undefined, undefined}).
@@ -117,32 +154,51 @@ foldl(Log, Fun, Acc) ->
 foldl(Log, Fun, Acc, Range) ->
     foldl(Log, Fun, Acc, Range, []).
 
-foldl(Log, Fun, Acc, {I1, I2}, Opts) ->
+foldl(Log, Fun, Acc, Range, Opts) ->
+    foldx(Log, Fun, Acc, Range, util:set(Opts, reverse, false)).
+
+foldr(Log, Fun, Acc) ->
+    foldr(Log, Fun, Acc, {undefined, undefined}).
+
+foldr(Log, Fun, Acc, Range) ->
+    foldr(Log, Fun, Acc, Range, []).
+
+foldr(Log, Fun, Acc, Range, Opts) ->
+    foldx(Log, Fun, Acc, Range, util:set(Opts, reverse, true)).
+
+foldx(Log, Fun, Acc, {I1, I2}, Opts) ->
     case gen_server:call(Log, state) of
         #state{root=Root, path=Path, offs=Offs} = S ->
+            {Outer, Inner} =
+                case util:get(Opts, reverse) of
+                    true ->
+                        {fun path:foldr/4, fun foldpathr/5};
+                    _ ->
+                        {fun path:foldl/4, fun foldpathl/5}
+                end,
             Lower = {PLo, _} = lower(S, I1),
             Upper = {PHi, _} = upper(S, I2),
-            Range = {filename:join(Root, PLo), filename:join([Root, PHi, "~"])},
             case Lower >= {Path, Offs} of
                 true ->
                     Acc;
                 false ->
                     Rash = util:get(Opts, rash),
-                    path:foldl(Root,
-                               fun (P, A) ->
-                                       foldpath({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Rash)
-                               end, Acc, Range)
+                    PRange = {filename:join(Root, PLo), filename:join([Root, PHi, "~"])},
+                    Outer(Root,
+                          fun (P, A) ->
+                                  Inner({P, rel(Root, P)}, Fun, A, {Lower, Upper}, Rash)
+                          end, Acc, PRange)
             end
     end.
 
 limit(Log, Fun, Acc, Range, Opts) ->
     case util:get(Opts, limit) of
         undefined ->
-            foldl(Log, Fun, Acc, Range, Opts);
+            foldx(Log, Fun, Acc, Range, Opts);
         Limit ->
-            element(2, foldl(Log,
-                             fun (I, {N, A}) when N < Limit ->
-                                     {N + 1, Fun(I, A)};
+            element(2, foldx(Log,
+                             fun (E, {N, A}) when N < Limit ->
+                                     {N + 1, Fun(E, A)};
                                  (_, {N, A}) ->
                                      {stop, {N, A}}
                              end, {0, Acc}, Range, Opts))
@@ -161,7 +217,7 @@ range(Log, Range) ->
     range(Log, Range, []).
 
 range(Log, Range, Opts) ->
-    limit(Log, fun (Item, Acc) -> [Item|Acc] end, [], Range, Opts).
+    lists:reverse(limit(Log, fun util:cons/2, [], Range, Opts)).
 
 since(Log, Id) ->
     since(Log, Id, []).
@@ -169,11 +225,23 @@ since(Log, Id) ->
 since(Log, Id, Opts) ->
     range(Log, {Id, undefined}, Opts).
 
-marker(Log, Fun, IO) ->
-    marker:new(fun ({{mark, Mark}, Data}) ->
-                       {{_, Next}, D} = bendl(Log, Fun, Data, {Mark, undefined}),
-                       {{mark, Next}, D}
-               end, marker:io(IO)).
+until(Log, Id) ->
+    until(Log, Id, []).
+
+until(Log, Id, Opts) ->
+    range(Log, {undefined, Id}, Opts).
+
+head(Log) ->
+    head(Log, []).
+
+head(Log, Opts) ->
+    range(Log, util:get(Opts, range, {undefined, undefined}), Opts).
+
+tail(Log) ->
+    tail(Log, []).
+
+tail(Log, Opts) ->
+    range(Log, util:get(Opts, range, {undefined, undefined}), util:set(Opts, reverse, true)).
 
 %% gen_server
 
@@ -200,18 +268,22 @@ init([Root, Opts]) ->
 
 handle_call(state, _From, State) ->
     {reply, State, State};
-handle_call({do, close}, _From, #state{file=File} = State) ->
+handle_call({do, close}, _From, #state{file=File, root=Root} = State) ->
     case do(flush, State) of
         {ok, S} ->
             case file:close(File) of
                 ok ->
-                    {stop, normal, ok, S};
+                    {stop, normal, {ok, Root}, S};
                 Error ->
                     {reply, Error, S}
             end;
         Error ->
             {reply, Error, State}
     end;
+handle_call({do, purge}, _From, #state{file=File, root=Root} = State) ->
+    _ = file:close(File),
+    _ = path:rmrf(Root),
+    {stop, normal, {ok, Root}, State};
 handle_call({do, What}, _From, State) ->
     {Reply, S} = do(What, State),
     {reply, Reply, S}.
@@ -368,7 +440,7 @@ strike(File, Offs) ->
             {error, badentry}
     end.
 
-foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
+foldpathl({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
     case file:read_file(Abs) of
         {ok, <<_:Start/binary, Data/binary>>} ->
             foldentries(Data, {Rel, Start}, Fun, Acc, Range);
@@ -377,10 +449,20 @@ foldpath({Abs, Rel}, Fun, Acc, Range, Start) when is_integer(Start) ->
         Error ->
             {stop, Error}
     end;
-foldpath({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, true) ->
-    foldpath({Abs, Rel}, Fun, Acc, Range, OLo);
-foldpath({Abs, Rel}, Fun, Acc, Range, _) ->
-    foldpath({Abs, Rel}, Fun, Acc, Range, ?OZero).
+foldpathl({Abs, Rel}, Fun, Acc, {{Rel, OLo}, _} = Range, true) ->
+    foldpathl({Abs, Rel}, Fun, Acc, Range, OLo);
+foldpathl({Abs, Rel}, Fun, Acc, Range, _) ->
+    foldpathl({Abs, Rel}, Fun, Acc, Range, ?OZero).
+
+foldpathr(Paths, Fun, Acc, Range, Rash) ->
+    case foldpathl(Paths, fun util:cons/2, [], Range, Rash) of
+        {stop, Reversed} when is_list(Reversed) ->
+            {stop, util:roll(Fun, Acc, Reversed)};
+        Reversed when is_list(Reversed) ->
+            util:roll(Fun, Acc, Reversed);
+        Other ->
+            Other
+    end.
 
 foldentries(_, _, _, {stop, Acc}, _) ->
     {stop, Acc};
@@ -462,7 +544,7 @@ do(verify, #state{file=File} = State) ->
             end
     end;
 
-do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = State) when O >= C ->
+do({write, Event}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = State) when O >= C ->
     Path = str(int_to_path(path_to_int(P, D) + 1, D)),
     case file:close(F) of
         ok ->
@@ -470,7 +552,7 @@ do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = St
                 {ok, File} ->
                     case do(verify, State#state{path=Path, file=File}) of
                         {ok, S} ->
-                            do({write, Entry}, S);
+                            do({write, Event}, S);
                         Error ->
                             {Error, State}
                     end;
@@ -480,8 +562,8 @@ do({write, Entry}, #state{root=R, file=F, path=P, offs=O, depth=D, chunk=C} = St
         {error, Reason} ->
             {error, {close, Reason}, State}
     end;
-do({write, Entry}, #state{file=File, path=Path, offs=Offs} = State) ->
-    {Data, EOD} = case Entry of
+do({write, Event}, #state{file=File, path=Path, offs=Offs} = State) ->
+    {Data, EOD} = case Event of
                       <<D/binary>> ->
                           {D, $\n};
                       {ok, D} ->

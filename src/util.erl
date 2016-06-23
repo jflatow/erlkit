@@ -21,6 +21,7 @@
          ok/2,
          op/2,
          bump/2,
+         cons/2,
          item/2,
          nil/1,
          def/2,
@@ -277,7 +278,7 @@ op(A, {append, X}) ->
 op(A, {prepend, X}) ->
     X ++ def(A, []);
 op(A, {cons, H}) ->
-    [H|def(A, [])];
+    cons(H, def(A, []));
 op(A, {init, H}) ->
     init(A, H);
 op(A, {drop, H}) ->
@@ -293,6 +294,9 @@ op(A, {M, F, X}) ->
 
 bump({N, V}, Op) ->
     {N + 1, op(V, Op)}.
+
+cons(H, T) ->
+    [H|T].
 
 item(undefined, _) ->
     undefined;

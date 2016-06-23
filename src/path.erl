@@ -107,29 +107,29 @@ foldr([C|_] = Path, Fun, Acc, Bounds, Order) when is_integer(C) ->
     foldr([Path], Fun, Acc, Bounds, Order);
 foldr([], _, Acc, _, _) ->
     Acc;
-foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Lower =/= undefined, Path < Lower ->
+foldr([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Lower =/= undefined, Path < Lower ->
     case lists:prefix(Path, Lower) of
         true ->
             case file:list_dir(Path) of
                 {ok, Paths} ->
-                    foldr(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Upper, Lower}, Order);
+                    foldr(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Lower, Upper}, Order);
                 _ ->
-                    foldr(Tail, Fun, Acc, {Upper, Lower}, Order)
+                    foldr(Tail, Fun, Acc, {Lower, Upper}, Order)
             end;
         false ->
             Acc
     end;
-foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Upper =:= undefined; Path < Upper ->
+foldr([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Upper =:= undefined; Path < Upper ->
     case file:list_dir(Path) of
         {ok, Paths} ->
-            foldr(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Upper, Lower}, Order);
+            foldr(joinl(Path, Order(Paths)) ++ Tail, Fun, Acc, {Lower, Upper}, Order);
         {error, enotdir} ->
-            foldr(Tail, Fun, Fun(Path, Acc), {Upper, Lower}, Order);
+            foldr(Tail, Fun, Fun(Path, Acc), {Lower, Upper}, Order);
         {error, enoent} ->
-            foldr(Tail, Fun, Acc, {Upper, Lower}, Order)
+            foldr(Tail, Fun, Acc, {Lower, Upper}, Order)
     end;
-foldr([Path|Tail], Fun, Acc, {Upper, Lower}, Order) when Path >= Upper ->
-    foldr(Tail, Fun, Acc, {Upper, Lower}, Order).
+foldr([Path|Tail], Fun, Acc, {Lower, Upper}, Order) when Path >= Upper ->
+    foldr(Tail, Fun, Acc, {Lower, Upper}, Order).
 
 foldlines(Path, Fun, Acc) ->
     foldlines(Path, Fun, Acc, []).
@@ -223,6 +223,10 @@ test(_, #file_info{mode=Mode}, executable, _) ->
 next(Path) ->
     next(Path, fun lists:usort/1).
 
+next(Path, forward) ->
+    next(Path);
+next(Path, reverse) ->
+    prev(Path);
 next(Path, Order) when is_binary(Path) ->
     next(binary_to_list(Path), Order);
 next(Path, Order) ->
@@ -243,6 +247,10 @@ next(Path, Order) ->
 prev(Path) ->
     prev(Path, fun lists:usort/1).
 
+prev(Path, forward) ->
+    prev(Path);
+prev(Path, reverse) ->
+    next(Path);
 prev(Path, Order) ->
     next(Path, fun (L) -> lists:reverse(Order(L)) end).
 
