@@ -5,6 +5,8 @@
          join/2,
          snap/2,
          split/2,
+         words/1,
+         words/2,
          substr/2,
          substr/3,
          disfix/2,
@@ -45,6 +47,8 @@ snap(Data, Sep) ->
             {<<>>, <<>>}
     end.
 
+split(undefined, _) ->
+    [];
 split(<<>>, _) ->
     [];
 split(Data, Sep) when is_binary(Data), is_integer(Sep) ->
@@ -62,6 +66,14 @@ split(Data, Sep) when is_binary(Data) ->
     binary:split(Data, Sep, [global]);
 split(Data, Sep) ->
     split(bin(Data), Sep).
+
+words(Data) ->
+    words(Data, "\\W+").
+
+words(undefined, _) ->
+    [];
+words(Data, Sep) ->
+    re:split(Data, Sep, [trim]).
 
 substr(Data, N) ->
     substr(Data, N, size(Data)).
@@ -124,6 +136,8 @@ lower(Bin) when is_binary(Bin) ->
 lower(Str) ->
     string:to_lower(Str).
 
+upper(undefined) ->
+    undefined;
 upper(Bin) when is_binary(Bin) ->
     unicode:characters_to_binary(upper(unicode:characters_to_list(Bin)));
 upper(Str) ->

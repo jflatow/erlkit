@@ -302,8 +302,12 @@ item(undefined, _) ->
     undefined;
 item(Tuple, N) when is_tuple(Tuple) ->
     element(N, Tuple);
-item(List, N) when is_list(List) ->
-    lists:nth(N, List).
+item([I|_], 1) ->
+    I;
+item([_|Items], N) ->
+    item(Items, N - 1);
+item([], _) ->
+    undefined.
 
 nil(Map) when is_map(Map) ->
     #{};
@@ -860,7 +864,7 @@ mapped(Keys, Val) ->
 
 random(Int) when is_integer(Int) ->
     X = num:log2floor(Int),
-    <<Y:X/integer-unit:8>> = crypto:rand_bytes(X),
+    <<Y:X/integer-unit:8>> = crypto:strong_rand_bytes(X),
     (Int * Y) div (1 bsl (X * 8)) + 1;
 random([_|_] = List) ->
     lists:nth(random(length(List)), List);
